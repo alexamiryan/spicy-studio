@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, QueryClient } from '@tanstack/react-query';
 import { api, qs } from './api';
 import { checkForUpdate } from './update';
 import type {
-  AuthStatus, MySettings, Asset, Balance, Element, Folder, Generation, Modality, ModelGroup, Page, ProviderStatus, Ref, Session, Workspace,
+  AuthStatus, MySettings, Asset, Balance, Element, Folder, Generation, Modality, ModelGroup, Page, ProviderStatus, Ref, Session, Workspace, Environment,
 } from './types';
 
 export const queryClient = new QueryClient({
@@ -19,6 +19,7 @@ export const keys = {
   models: (m: Modality) => ['models', m] as const,
   balances: ['balances'] as const,
   providers: ['providers'] as const,
+  environments: ['environments'] as const,
 };
 
 export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: () => api.get<Workspace[]>('/api/workspaces') });
@@ -64,6 +65,14 @@ export const useRefs = (ws: string | null, tab: string, kind?: string) => useInf
   enabled: Boolean(ws),
   initialPageParam: '' as string,
   queryFn: ({ pageParam }) => api.get<Page<Ref>>(`/api/refs?${qs({ workspaceId: ws, tab, kind, cursor: pageParam, limit: 60 })}`),
+  getNextPageParam: last => last.nextCursor || undefined,
+});
+
+export const useEnvironments = (enabled = true) => useInfiniteQuery({
+  queryKey: keys.environments,
+  enabled,
+  initialPageParam: '' as string,
+  queryFn: ({ pageParam }) => api.get<Page<Environment>>(`/api/environments?${qs({ cursor: pageParam, limit: 60 })}`),
   getNextPageParam: last => last.nextCursor || undefined,
 });
 

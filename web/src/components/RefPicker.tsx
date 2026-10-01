@@ -3,15 +3,28 @@ import { Check, Film, Folder as FolderIcon, Loader2, Music, Play, RotateCcw, Sav
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { addRefsToDraft, cachedModel, uploadRefs } from '../lib/actions';
+import { addRefsToDraft, cachedModel, environmentRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
 import { useFileDrop, usePasteFiles } from '../lib/fileInput';
-import { keys, queryClient, useAssets, useFolders, useRefs } from '../lib/queries';
+import { keys, queryClient, useAssets, useEnvironments, useFolders, useRefs } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
-import type { Asset, MediaKind, Ref } from '../lib/types';
+import type { Asset, Environment, MediaKind, Ref } from '../lib/types';
 import { Button, Empty, IconButton, Modal, Segmented, Spinner } from './ui';
 
-type Tab = 'uploads' | 'model' | 'generated';
-export type Item = { id: string; thumbUrl: string | null; url: string; kind: MediaKind; name: string; asset?: Asset; ref?: Ref };
+type Tab = 'uploads' | 'model' | 'generated' | 'environments';
+export type Item = { id: string; thumbUrl: string | null; url: string; kind: MediaKind; name: string; asset?: Asset; ref?: Ref; env?: Environment };
+
+export const envItem = (e: Environment): Item => ({ id: e.id, thumbUrl: e.thumbUrl, url: e.url, kind: e.kind, name: e.name, env: e });
+
+/** Workspace references for picked items: generated results and environment photos become references first. */
+export async function itemsToRefs(workspaceId: string, items: Item[]): Promise<Ref[]> {
+  const out: Ref[] = [];
+  for (const item of items) {
+    if (item.ref) out.push(item.ref);
+    else if (item.env) out.push((await environmentRefs(workspaceId, [item.env.id]))[0]);
+    else out.push(await api.post<Ref>('/api/refs/from-asset', { assetId: item.asset!.id }));
+  }
+  return out;
+}
 
 export function useInfiniteSentinel(query: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -120,16 +133,18 @@ export function RefPicker() {
 
   useEffect(() => { if (open) { setPicked([]); setTab('generated'); } }, [open, fieldKey]);
 
-  const refs = useRefs(open && tab !== 'generated' ? ws : null, tab === 'model' ? 'model' : 'uploads', kind);
+  const refs = useRefs(open && (tab === 'model' || tab === 'uploads') ? ws : null, tab === 'model' ? 'model' : 'uploads', kind);
   const assets = useAssets(open && tab === 'generated' ? ws : null, folder, kind === 'audio' ? 'all' : kind);
+  const environments = useEnvironments(open && tab === 'environments');
   const folders = useFolders(ws);
-  const active = tab === 'generated' ? assets : refs;
+  const active = tab === 'generated' ? assets : tab === 'environments' ? environments : refs;
   const sentinel = useInfiniteSentinel(active);
 
   const items: Item[] = useMemo(() => tab === 'generated'
     ? (assets.data?.pages.flatMap(p => p.items) || []).map(a => ({ id: a.id, thumbUrl: a.thumbUrl, url: a.url, kind: a.kind, name: a.modelName, asset: a }))
+    : tab === 'environments' ? (environments.data?.pages.flatMap(p => p.items) || []).map(envItem)
     : (refs.data?.pages.flatMap(p => p.items) || []).map(r => ({ id: r.id, thumbUrl: r.thumbUrl, url: r.url, kind: r.kind, name: r.name, ref: r })),
-  [tab, assets.data, refs.data]);
+  [tab, assets.data, refs.data, environments.data]);
 
   function toggle(item: Item) {
     setPicked(p => {
@@ -144,9 +159,10 @@ export function RefPicker() {
     if (!files?.length) return;
     setUploading(true);
     try {
-      const uploaded = await uploadRefs(ws!, files, tab === 'model');
+      const fitting = tab === 'environments'
+        ? (await uploadEnvironments(files)).map(envItem)
+        : (await uploadRefs(ws!, files, tab === 'model')).filter(r => r.kind === kind).map(r => ({ id: r.id, thumbUrl: r.thumbUrl, url: r.url, kind: r.kind, name: r.name, ref: r }));
       if (tab === 'generated') setTab('uploads'); // show what was just uploaded
-      const fitting = uploaded.filter(r => r.kind === kind).map(r => ({ id: r.id, thumbUrl: r.thumbUrl, url: r.url, kind: r.kind, name: r.name, ref: r }));
       setPicked(p => [...p, ...fitting].slice(0, Math.max(room, 1)));
     } catch (error) {
       toast(errorText(error), 'error');
@@ -169,11 +185,7 @@ export function RefPicker() {
   async function confirm() {
     setBusy(true);
     try {
-      const refsToAdd: Ref[] = [];
-      for (const item of picked) {
-        refsToAdd.push(item.ref || await api.post<Ref>('/api/refs/from-asset', { assetId: item.asset!.id }));
-      }
-      addRefsToDraft(refsToAdd, fieldKey);
+      addRefsToDraft(await itemsToRefs(ws!, picked), fieldKey);
       queryClient.invalidateQueries({ queryKey: keys.refs(ws!) });
       set({ modal: null });
     } catch (error) {
@@ -197,9 +209,12 @@ export function RefPicker() {
       }
     >
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-panel px-4 py-3">
-        <Segmented value={tab} onChange={setTab} options={[
-          { value: 'generated', label: 'Generated' }, { value: 'model', label: 'Model refs' }, { value: 'uploads', label: 'Uploads' },
-        ]} />
+        <div className="no-scrollbar -my-1 max-w-full overflow-x-auto py-1">
+          <Segmented value={tab} onChange={setTab} options={[
+            { value: 'generated', label: 'Generated' }, { value: 'model', label: 'Model refs' }, { value: 'uploads', label: 'Uploads' },
+            ...(kind === 'image' ? [{ value: 'environments' as const, label: 'Environments' }] : []),
+          ]} />
+        </div>
         {tab === 'generated' ? (
           <label className="flex h-10 items-center gap-2 rounded-xl border border-line bg-panel-2 px-3 text-sm">
             <FolderIcon className="size-4 text-muted" />
@@ -238,13 +253,15 @@ export function RefPicker() {
         )}
         {drop.over && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-accent/10 font-medium text-accent">
-            Drop to upload{tab === 'model' ? ' as model refs' : ''}
+            Drop to upload{tab === 'model' ? ' as model refs' : tab === 'environments' ? ' to environments' : ''}
           </div>
         )}
         {active.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
           : !items.length ? (
-            <Empty title={tab === 'generated' ? 'No results in this folder' : tab === 'model' ? 'No model references yet' : 'No uploads yet'}>
-              {tab === 'model' ? 'Upload your influencer\'s face and body shots here to reuse them in every generation.' : tab === 'uploads' ? 'Upload, drag files here, or paste an image (Ctrl+V).' : 'Pick another folder.'}
+            <Empty title={tab === 'generated' ? 'No results in this folder' : tab === 'model' ? 'No model references yet' : tab === 'environments' ? 'No environments yet' : 'No uploads yet'}>
+              {tab === 'model' ? 'Upload your influencer\'s face and body shots here to reuse them in every generation.'
+                : tab === 'environments' ? 'Upload photos of real places once and use them as references in every workspace. Drag files here or paste an image (Ctrl+V).'
+                : tab === 'uploads' ? 'Upload, drag files here, or paste an image (Ctrl+V).' : 'Pick another folder.'}
             </Empty>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">

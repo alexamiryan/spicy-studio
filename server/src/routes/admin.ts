@@ -99,7 +99,8 @@ export function adminRoutes(app: FastifyInstance) {
     // save location are never touched.
     const files = (await q<{ file: string }>(
       `select r.file from refs r join workspaces w on w.id = r.workspace_id where w.user_id = $1
-       union select a.file from assets a join workspaces w on w.id = a.workspace_id where w.user_id = $1`, [id])).map(r => r.file);
+       union select a.file from assets a join workspaces w on w.id = a.workspace_id where w.user_id = $1
+       union select file from environments where user_id = $1`, [id])).map(r => r.file);
     await q('delete from users where id = $1', [id]); // cascades to sessions, workspaces (and their content), settings
     dropProviders(id);
     collectGarbage(files).catch(error => console.error('garbage collection after user delete', error));

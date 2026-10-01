@@ -23,6 +23,8 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
   spend anything (dollars for SpicyAPI, credits for Higgsfield).
 - **References**: upload, drag and drop or paste images; mark canonical shots as **Model refs**;
   turn any result into a reference. Mention them in prompts as `@image1`, `@image2`…
+- **Environments**: a personal library of real-location photos (rooms, streets, cafés…) shared by all
+  your workspaces. Upload once, then pick them as references anywhere (create box → Environments).
 - **Elements**: named groups of references (`@Mia`). Mentioning one attaches its photos, or, on
   models that support it (Kling O3 on SpicyAPI; Kling 3.0, Seedance 2.0, Seedream and others on
   Higgsfield), passes it to the provider as a native element/character.

@@ -17,7 +17,7 @@ export const emptyDraft = (): Draft => ({ modality: 'image', models: {}, setting
 
 export type Modal =
   | { type: 'settings'; tab?: 'general' | 'save' | 'providers' | 'account' | 'users' }
-  | { type: 'library'; tab?: 'refs' | 'elements' }
+  | { type: 'library'; tab?: 'refs' | 'environments' | 'elements' }
   | { type: 'workspace'; id?: string }
   | { type: 'refPicker'; fieldKey: string }
   | { type: 'move'; assetIds: string[] }

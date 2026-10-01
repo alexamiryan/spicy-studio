@@ -72,6 +72,20 @@ export interface Ref {
   height: number | null;
   isModelRef: boolean;
   sourceAssetId: string | null;
+  sourceEnvironmentId?: string | null;
+  createdAt: string;
+}
+
+/** A photo in the user's environment library (shared by all their workspaces). */
+export interface Environment {
+  id: string;
+  kind: MediaKind;
+  name: string;
+  mime: string;
+  url: string;
+  thumbUrl: string | null;
+  width: number | null;
+  height: number | null;
   createdAt: string;
 }
 

@@ -1,13 +1,13 @@
 import { clsx } from 'clsx';
-import { AtSign, CheckSquare, Folder as FolderIcon, Loader2, Pencil, Plus, Sparkles, Star, Trash2, Upload, X } from 'lucide-react';
+import { AtSign, CheckSquare, Folder as FolderIcon, Loader2, MapPin, Pencil, Plus, Sparkles, Star, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { addRefsToDraft, uploadRefs } from '../lib/actions';
+import { addRefsToDraft, environmentRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
 import { useFileDrop, usePasteFiles } from '../lib/fileInput';
-import { keys, queryClient, useAssets, useElements, useFolders, useRefs } from '../lib/queries';
+import { keys, queryClient, useAssets, useElements, useEnvironments, useFolders, useRefs } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
-import type { Asset, Element, Ref } from '../lib/types';
-import { AudioFace, MediaTile, Preview, useInfiniteSentinel, type Item } from './RefPicker';
+import type { Asset, Element, Environment, Ref } from '../lib/types';
+import { AudioFace, MediaTile, Preview, envItem, itemsToRefs, useInfiniteSentinel, type Item } from './RefPicker';
 import { Button, Empty, Field, IconButton, Modal, Segmented, Spinner, inputClass } from './ui';
 
 /** Pick generated photos (by folder) and file them under Model refs. */
@@ -269,13 +269,130 @@ const toItem = {
 const sameMedia = (a: Item, b: Item) => a.url.split('?')[0] === b.url.split('?')[0];
 
 /** Create or edit an element: pick its photos from generated results, model refs or uploads (or upload new ones). */
+/** The environment library: real-location photos shared by all of the user's workspaces. */
+function EnvironmentsTab() {
+  const { workspaceId: ws, toast } = useStore();
+  const open = useStore(s => s.modal?.type === 'library');
+  const query = useEnvironments();
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) || [], [query.data]);
+  const sentinel = useInfiniteSentinel(query);
+  const [detail, setDetail] = useState<Environment | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [allIds, setAllIds] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: keys.environments });
+
+  async function onFiles(files: File[] | FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    try { const added = await uploadEnvironments(files); toast(`Added ${added.length} environment${added.length === 1 ? '' : 's'}`, 'ok'); }
+    catch (error) { toast(errorText(error), 'error'); }
+    finally { setUploading(false); if (input.current) input.current.value = ''; }
+  }
+  usePasteFiles(onFiles, open);
+  const drop = useFileDrop(onFiles, open);
+
+  async function rename(env: Environment, name: string) {
+    try { setDetail(await api.patch<Environment>(`/api/environments/${env.id}`, { name })); refresh(); }
+    catch (error) { toast(errorText(error), 'error'); }
+  }
+  async function remove(ids: string[]) {
+    if (!confirm(`Delete ${ids.length === 1 ? 'this environment' : `${ids.length} environments`} from the library? References already made from ${ids.length === 1 ? 'it' : 'them'} in your workspaces stay.`)) return;
+    setBusy('delete');
+    try {
+      await api.post('/api/environments/delete', { ids });
+      setSelected(s => s.filter(id => !ids.includes(id)));
+      if (detail && ids.includes(detail.id)) setDetail(null);
+      refresh();
+    } catch (error) { toast(errorText(error), 'error'); }
+    finally { setBusy(null); }
+  }
+  async function use(ids: string[]) {
+    setBusy('use');
+    try {
+      const order = new Map(ids.map((id, i) => [id, i]));
+      const refs = await environmentRefs(ws!, [...ids].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)));
+      if (addRefsToDraft(refs)) useStore.getState().set({ modal: null });
+    } catch (error) { toast(errorText(error), 'error'); }
+    finally { setBusy(null); }
+  }
+  const allSelected = allIds !== null && allIds.length > 0 && allIds.every(id => selected.includes(id));
+  async function selectAll() {
+    if (allSelected) { setSelected([]); return; }
+    try { const ids = await api.get<string[]>('/api/environments/ids'); setAllIds(ids); setSelected(ids); }
+    catch (error) { toast(errorText(error), 'error'); }
+  }
+  const exitSelect = () => { setSelecting(false); setSelected([]); };
+
+  return (
+    <div className="relative flex min-h-full flex-col" {...drop.props}>
+      {drop.over && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-accent/10 font-medium text-accent">
+          Drop to add to environments
+        </div>
+      )}
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-panel px-4 py-3">
+        <span className="flex min-w-0 items-center gap-1.5 text-sm text-muted"><MapPin className="size-4 shrink-0 text-accent" />Shared by all your workspaces</span>
+        <input ref={input} type="file" multiple accept="image/*" className="hidden" onChange={e => onFiles(e.target.files)} />
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant={selecting ? 'subtle' : 'ghost'} onClick={() => (selecting ? exitSelect() : (setSelecting(true), setDetail(null)))}>
+            <CheckSquare className="size-4" />{selecting ? 'Done' : 'Select'}
+          </Button>
+          <Button variant="outline" onClick={() => input.current?.click()} loading={uploading}>{!uploading && <Upload className="size-4" />} Upload</Button>
+        </div>
+      </div>
+      {selecting && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-4 py-2.5">
+          <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
+          <Button size="sm" variant="ghost" onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            <Button size="sm" disabled={!selected.length} loading={busy === 'use'} onClick={() => use(selected)}>Use</Button>
+            <Button size="sm" variant="danger" disabled={!selected.length} loading={busy === 'delete'} onClick={() => remove(selected)}><Trash2 className="size-4" />Delete</Button>
+          </div>
+        </div>
+      )}
+      {detail && !selecting && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-4 py-3">
+          <img src={detail.thumbUrl || ''} alt="" className="size-12 rounded-lg object-cover" />
+          <input className={clsx(inputClass, 'h-10 w-auto min-w-0 flex-1')} defaultValue={detail.name} key={detail.id}
+            onBlur={e => e.target.value.trim() && e.target.value !== detail.name && rename(detail, e.target.value)} />
+          <Button size="sm" loading={busy === 'use'} onClick={() => use([detail.id])}>Use</Button>
+          <IconButton label="Delete environment" className="size-9 text-danger" onClick={() => remove([detail.id])}><Trash2 className="size-4" /></IconButton>
+          <IconButton label="Close" className="size-9" onClick={() => setDetail(null)}><X className="size-4" /></IconButton>
+        </div>
+      )}
+      <div className="flex-1 p-4">
+        {query.isLoading ? <div className="flex justify-center py-16"><Spinner /></div> : !items.length ? (
+          <Empty title="No environments yet">
+            Upload photos of real places (rooms, streets, cafés…) once and use them as references in every workspace. Drag files here or paste an image (Ctrl+V).
+          </Empty>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-7">
+            {items.map(e => {
+              const index = selected.indexOf(e.id);
+              return (
+                <MediaTile key={e.id} item={envItem(e)} selected={selecting ? index >= 0 : detail?.id === e.id} badge={selecting && index >= 0 ? index + 1 : undefined}
+                  onClick={() => (selecting ? setSelected(sel => (sel.includes(e.id) ? sel.filter(x => x !== e.id) : [...sel, e.id])) : setDetail(e))} />
+              );
+            })}
+          </div>
+        )}
+        <div ref={sentinel} className="flex h-10 items-center justify-center">{query.isFetchingNextPage && <Loader2 className="size-5 animate-spin text-muted" />}</div>
+      </div>
+    </div>
+  );
+}
+
 function ElementEditor({ element, onDone }: { element: Element | null; onDone: () => void }) {
   const { workspaceId: ws, toast } = useStore();
   const [name, setName] = useState(element?.name || '');
   const [description, setDescription] = useState(element?.description || '');
   const [picked, setPicked] = useState<Item[]>(() => (element?.refs || []).map(toItem.ref));
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<'generated' | 'model' | 'uploads'>('generated');
+  const [tab, setTab] = useState<'generated' | 'model' | 'uploads' | 'environments'>('generated');
   const [folder, setFolder] = useState('all');
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<Item | null>(null);
@@ -283,13 +400,15 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
 
   const folders = useFolders(ws);
   const assets = useAssets(tab === 'generated' ? ws : null, folder, 'image');
-  const refs = useRefs(tab !== 'generated' ? ws : null, tab === 'model' ? 'model' : 'uploads', 'image');
-  const active = tab === 'generated' ? assets : refs;
+  const refs = useRefs(tab === 'model' || tab === 'uploads' ? ws : null, tab === 'model' ? 'model' : 'uploads', 'image');
+  const environments = useEnvironments(tab === 'environments');
+  const active = tab === 'generated' ? assets : tab === 'environments' ? environments : refs;
   const sentinel = useInfiniteSentinel(active);
   const items: Item[] = useMemo(() => tab === 'generated'
     ? (assets.data?.pages.flatMap(p => p.items) || []).map(toItem.asset)
+    : tab === 'environments' ? (environments.data?.pages.flatMap(p => p.items) || []).map(envItem)
     : (refs.data?.pages.flatMap(p => p.items) || []).map(toItem.ref),
-  [tab, assets.data, refs.data]);
+  [tab, assets.data, refs.data, environments.data]);
 
   const indexOf = (item: Item) => picked.findIndex(p => sameMedia(p, item));
   const toggle = (item: Item) => setPicked(p => (p.some(x => sameMedia(x, item)) ? p.filter(x => !sameMedia(x, item)) : [...p, item]));
@@ -302,8 +421,9 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
     if (!files?.length) return;
     setUploading(true);
     try {
-      const uploaded = await uploadRefs(ws!, files, tab === 'model');
-      const images = uploaded.filter(r => r.kind === 'image').map(toItem.ref);
+      const images = tab === 'environments'
+        ? (await uploadEnvironments(files)).map(envItem)
+        : (await uploadRefs(ws!, files, tab === 'model')).filter(r => r.kind === 'image').map(toItem.ref);
       setPicked(p => [...p, ...images.filter(i => !p.some(x => sameMedia(x, i)))]);
       if (tab === 'generated') setTab('uploads');
       toast(`Uploaded and added ${images.length}`, 'ok');
@@ -316,10 +436,8 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
   async function save() {
     setBusy(true);
     try {
-      // Generated results become references (reusing one if it was turned into a ref before).
-      const fromAssets = picked.filter(i => !i.ref && i.asset).map(i => i.asset!.id);
-      const created = fromAssets.length ? await api.post<Ref[]>('/api/refs/from-assets', { assetIds: fromAssets }) : [];
-      const refIds = picked.map(i => i.ref?.id || created[fromAssets.indexOf(i.asset!.id)].id);
+      // Generated results and environment photos become references (reusing ones made before).
+      const refIds = (await itemsToRefs(ws!, picked)).map(r => r.id);
       const body = { workspaceId: ws, name: name.trim(), description: description.trim(), refIds: [...new Set(refIds)] };
       await (element ? api.patch(`/api/elements/${element.id}`, body) : api.post('/api/elements', body));
       queryClient.invalidateQueries({ queryKey: keys.elements(ws!) });
@@ -377,6 +495,7 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 border-y border-line bg-panel px-4 py-3">
         <Segmented value={tab} onChange={setTab} options={[
           { value: 'generated', label: 'Generated' }, { value: 'model', label: 'Model refs' }, { value: 'uploads', label: 'Uploads' },
+          { value: 'environments', label: 'Environments' },
         ]} />
         {tab === 'generated' && (
           <label className="flex h-10 items-center gap-2 rounded-xl border border-line bg-panel-2 px-3 text-sm">
@@ -399,7 +518,7 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
 
       <div className="flex-1 p-4">
         {active.isLoading ? <div className="flex justify-center py-10"><Spinner /></div> : !items.length ? (
-          <Empty title={tab === 'generated' ? 'No generated photos here' : tab === 'model' ? 'No model refs yet' : 'No uploads yet'}>
+          <Empty title={tab === 'generated' ? 'No generated photos here' : tab === 'model' ? 'No model refs yet' : tab === 'environments' ? 'No environments yet' : 'No uploads yet'}>
             {tab === 'generated' ? 'Pick another folder.' : 'Upload, drag files here, or paste an image (Ctrl+V).'}
           </Empty>
         ) : (
@@ -467,10 +586,10 @@ export function Library() {
   return (
     <Modal open={open} onClose={() => set({ modal: null })} full title={
       <Segmented value={tab} onChange={t => set({ modal: { type: 'library', tab: t } })} options={[
-        { value: 'refs', label: 'References' }, { value: 'elements', label: 'Elements' },
+        { value: 'refs', label: 'References' }, { value: 'environments', label: 'Environments' }, { value: 'elements', label: 'Elements' },
       ]} />
     }>
-      {tab === 'refs' ? <RefsTab /> : <ElementsTab />}
+      {tab === 'refs' ? <RefsTab /> : tab === 'environments' ? <EnvironmentsTab /> : <ElementsTab />}
     </Modal>
   );
 }

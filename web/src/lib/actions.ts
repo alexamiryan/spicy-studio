@@ -2,7 +2,7 @@ import { api } from './api';
 import { defaultSettings, primaryRefField, remapRefs } from './models';
 import { invalidateGallery, keys, queryClient } from './queries';
 import { errorText, useStore } from './store';
-import type { Asset, GenerationDetail, Modality, ModelGroup, ModelInfo, Ref, Workspace } from './types';
+import type { Asset, Environment, GenerationDetail, Modality, ModelGroup, ModelInfo, Ref, Workspace } from './types';
 
 export function cachedModel(modelId?: string, modality?: Modality): ModelInfo | undefined {
   if (!modelId) return undefined;
@@ -296,4 +296,21 @@ export async function addToModelRefs(asset: Asset) {
   } catch (error) {
     toast(errorText(error), 'error');
   }
+}
+
+/** Upload photos to the environment library (shared by all workspaces). */
+export async function uploadEnvironments(files: File[] | FileList): Promise<Environment[]> {
+  const form = new FormData();
+  for (const file of Array.from(files)) form.append('file', file, file.name);
+  const created = await api.post<Environment[]>('/api/environments/upload', form);
+  queryClient.invalidateQueries({ queryKey: keys.environments });
+  return created;
+}
+
+/** References in this workspace for environment photos (created once, then reused), in the given order. */
+export async function environmentRefs(workspaceId: string, ids: string[]): Promise<Ref[]> {
+  if (!ids.length) return [];
+  const refs = await api.post<Ref[]>('/api/environments/use', { workspaceId, ids });
+  queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId) });
+  return refs;
 }

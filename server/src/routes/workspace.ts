@@ -135,7 +135,7 @@ export function workspaceRoutes(app: FastifyInstance) {
     const { workspaceId, tab, kind, cursor, limit } = request.query as Record<string, string | undefined>;
     await ownWorkspace(uid(request), workspaceId);
     const params: unknown[] = [workspaceId];
-    let where = 'workspace_id = $1';
+    let where = 'workspace_id = $1 and source_environment_id is null';
     if (tab === 'model') where += ' and is_model_ref';
     else if (tab === 'uploads') where += ' and not is_model_ref and source_asset_id is null';
     if (kind) { params.push(kind); where += ` and kind = $${params.length}`; }
@@ -153,7 +153,7 @@ export function workspaceRoutes(app: FastifyInstance) {
     const { workspaceId, tab, kind } = request.query as Record<string, string | undefined>;
     await ownWorkspace(uid(request), workspaceId);
     const params: unknown[] = [workspaceId];
-    let where = 'workspace_id = $1';
+    let where = 'workspace_id = $1 and source_environment_id is null';
     if (tab === 'model') where += ' and is_model_ref';
     else if (tab === 'uploads') where += ' and not is_model_ref and source_asset_id is null';
     if (kind) { params.push(kind); where += ` and kind = $${params.length}`; }

@@ -200,7 +200,7 @@ export async function fitImageUnder(input: Buffer, mime: string, maxBytes: numbe
 export async function collectGarbage(files: string[]) {
   for (const file of new Set(files)) {
     const [{ count }] = await q<{ count: number }>(
-      'select (select count(*) from refs where file = $1) + (select count(*) from assets where file = $1) as count', [file]);
+      'select (select count(*) from refs where file = $1) + (select count(*) from assets where file = $1) + (select count(*) from environments where file = $1) as count', [file]);
     if (count > 0) continue;
     await rm(absPath(file), { force: true });
     const thumb = file.replace(/\.[a-z0-9]+$/, '_t.webp');

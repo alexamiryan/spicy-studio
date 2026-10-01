@@ -15,6 +15,7 @@ import { generationRoutes } from './routes/generations.js';
 import { providerRoutes } from './routes/providers.js';
 import { workspaceRoutes } from './routes/workspace.js';
 import { adminRoutes } from './routes/admin.js';
+import { environmentRoutes } from './routes/environments.js';
 import { registerMediaGuard } from './services/access.js';
 import { bootstrap } from './services/bootstrap.js';
 import { startWorker } from './services/generations.js';
@@ -62,6 +63,7 @@ registerEvents(app);
 providerRoutes(app);
 adminRoutes(app);
 workspaceRoutes(app);
+environmentRoutes(app);
 generationRoutes(app);
 
 app.get('/healthz', async () => ({ ok: true }));

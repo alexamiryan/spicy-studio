@@ -4,7 +4,14 @@ export function refDto(r: any) {
   return {
     id: r.id, workspaceId: r.workspace_id, kind: r.kind, name: r.name, mime: r.mime,
     url: media(r.file), thumbUrl: media(r.thumb) || (r.kind === 'image' ? media(r.file) : null),
-    width: r.width, height: r.height, isModelRef: r.is_model_ref, sourceAssetId: r.source_asset_id, createdAt: r.created_at,
+    width: r.width, height: r.height, isModelRef: r.is_model_ref, sourceAssetId: r.source_asset_id, sourceEnvironmentId: r.source_environment_id, createdAt: r.created_at,
+  };
+}
+
+export function environmentDto(e: any) {
+  return {
+    id: e.id, kind: e.kind, name: e.name, mime: e.mime, url: media(e.file),
+    thumbUrl: media(e.thumb) || media(e.file), width: e.width, height: e.height, createdAt: e.created_at,
   };
 }
 

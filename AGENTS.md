@@ -136,6 +136,14 @@ Notes:
 
 **Mock** (`mock.ts`, only with `MOCK_PROVIDER=1`): free, local files, configurable failures.
 
+### Environment library
+
+`environments` rows belong to a user (not a workspace) and are shared by all of that user's workspaces
+(`routes/environments.ts`). Generations only reference workspace refs, so using an environment creates a
+workspace ref with `source_environment_id` (`POST /api/environments/use`, reused on later picks). Those
+refs are hidden from the per-workspace reference lists. Deleting an environment keeps refs made from it.
+File cleanup (`collectGarbage`) and the media guard both account for `environments`.
+
 ### @mentions and elements
 
 `services/prompt.ts: resolvePrompt()` turns `@image2` into `image 2`. For normal models `@Mia` attaches
@@ -146,7 +154,7 @@ the element's photos to the primary image field and becomes `image 3, image 4`. 
 
 - Ownership hangs off `workspaces.user_id`. Refs, elements, folders, generations and assets are reached
   through their workspace. Per-user tables: `provider_settings`, `favorite_models`, `provider_uploads`,
-  `provider_elements`, `user_settings`, `sessions`.
+  `provider_elements`, `environments`, `user_settings`, `sessions`.
 - **Every route must check ownership** with `services/access.ts`: `ownWorkspace`, `ownRow(userId, table, id)`,
   `ownedIds`. Foreign ids respond **404** (not 403) so ids can't be probed. Bulk endpoints silently drop
   foreign ids.

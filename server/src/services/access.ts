@@ -52,6 +52,8 @@ export function registerMediaGuard(app: FastifyInstance) {
       `select 1 from refs r join workspaces w on w.id = r.workspace_id where (r.file = $1 or r.thumb = $1) and w.user_id = $2
        union all
        select 1 from assets a join workspaces w on w.id = a.workspace_id where (a.file = $1 or a.thumb = $1) and w.user_id = $2
+       union all
+       select 1 from environments e where (e.file = $1 or e.thumb = $1) and e.user_id = $2
        limit 1`, [rel, request.userId]);
     if (!owned) return reply.code(404).send({ error: 'Not found' });
     if (mediaCache.size > 50_000) mediaCache.clear();
