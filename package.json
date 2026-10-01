@@ -1,0 +1,15 @@
+{
+  "name": "spicy-studio",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w server && npm run build -w web",
+    "test": "npm test -w server"
+  }
+}

@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-studio}
+      POSTGRES_DB: studio
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  studio:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgres://studio:${POSTGRES_PASSWORD:-studio}@db:5432/studio
+      DATA_DIR: /data
+      EXPORT_ROOT: /exports
+      # Shown in the UI so you know where exports land on your machine.
+      EXPORT_ROOT_LABEL: ${EXPORT_ROOT:?Set EXPORT_ROOT in .env to the host folder for exports}
+      # Optional: fixed key for encrypting stored secrets (otherwise generated into data/app.key).
+      APP_SECRET: ${APP_SECRET:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      MOCK_PROVIDER: ${MOCK_PROVIDER:-}
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+      - ${EXPORT_ROOT}:/exports
+
+volumes:
+  pgdata:
