@@ -172,12 +172,87 @@ export async function createFolder(workspaceId: string, name: string) {
   return folder;
 }
 
+const UPLOAD_BATCH = 4;
+
+/**
+ * Upload many files a few at a time (the server takes a limited number per request, and big selections
+ * of large photos shouldn't ride on one request). A failed batch is retried file by file, so one bad
+ * file doesn't sink the rest; failures are reported at the end. Shows progress in the upload pill.
+ */
+async function uploadInBatches<T>(files: File[] | FileList, url: string, label: string): Promise<T[]> {
+  const list = Array.from(files);
+  const { set, toast } = useStore.getState();
+  const out: T[] = [];
+  const failed: string[] = [];
+  let firstError = '';
+  const send = (batch: File[]) => {
+    const form = new FormData();
+    for (const file of batch) form.append('file', file, file.name);
+    return api.post<T[]>(url, form);
+  };
+  if (list.length > 1) set({ upload: { done: 0, total: list.length, label } });
+  try {
+    for (let i = 0; i < list.length; i += UPLOAD_BATCH) {
+      const batch = list.slice(i, i + UPLOAD_BATCH);
+      try { out.push(...await send(batch)); }
+      catch (error) {
+        if (batch.length === 1) { failed.push(batch[0].name); firstError ||= errorText(error); }
+        else for (const file of batch) {
+          try { out.push(...await send([file])); }
+          catch (single) { failed.push(file.name); firstError ||= errorText(single); }
+        }
+      }
+      if (list.length > 1) set({ upload: { done: Math.min(i + UPLOAD_BATCH, list.length), total: list.length, label } });
+    }
+  } finally {
+    set({ upload: null });
+  }
+  if (failed.length) {
+    const names = failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` and ${failed.length - 3} more` : '');
+    toast(list.length === 1 ? firstError : `${failed.length} of ${list.length} files were not uploaded (${names}): ${firstError}`, 'error');
+  }
+  return out;
+}
+
 export async function uploadRefs(workspaceId: string, files: File[] | FileList, modelRef = false): Promise<Ref[]> {
-  const form = new FormData();
-  for (const file of Array.from(files)) form.append('file', file, file.name);
-  const refs = await api.post<Ref[]>(`/api/refs/upload?workspaceId=${workspaceId}${modelRef ? '&modelRef=1' : ''}`, form);
+  const refs = await uploadInBatches<Ref>(files, `/api/refs/upload?workspaceId=${workspaceId}${modelRef ? '&modelRef=1' : ''}`,
+    modelRef ? 'Uploading model refs' : 'Uploading');
   queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId) });
   return refs;
+}
+
+/** Move workspace references between Model refs, Uploads and the environment library. */
+export async function moveRefs(workspaceId: string, ids: string[], to: 'model' | 'uploads' | 'environments') {
+  const action = to === 'model' ? 'model' : to === 'uploads' ? 'unmodel' : 'environments';
+  const result = await api.post<{ count: number; skipped?: number }>('/api/refs/bulk', { ids, action });
+  queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId) });
+  if (to === 'environments') queryClient.invalidateQueries({ queryKey: keys.environments });
+  return result;
+}
+
+/** Move environment photos into this workspace's Model refs or Uploads (out of the shared library). */
+export async function moveEnvironments(workspaceId: string, ids: string[], to: 'model' | 'uploads') {
+  const result = await api.post<{ count: number }>('/api/environments/move', { workspaceId, ids, to });
+  queryClient.invalidateQueries({ queryKey: keys.environments });
+  queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId) });
+  return result;
+}
+
+/** Add generated photos to the environment library. */
+export async function assetsToEnvironments(assetIds: string[]) {
+  const created = await api.post<Environment[]>('/api/environments/from-assets', { assetIds });
+  queryClient.invalidateQueries({ queryKey: keys.environments });
+  return created;
+}
+
+export async function addToEnvironments(asset: Asset) {
+  const { toast } = useStore.getState();
+  try {
+    await assetsToEnvironments([asset.id]);
+    toast('Added to Environments', 'ok');
+  } catch (error) {
+    toast(errorText(error), 'error');
+  }
 }
 
 /** The input a photo should go into to animate it: a start frame if the model has one, else its main image input. */
@@ -300,9 +375,7 @@ export async function addToModelRefs(asset: Asset) {
 
 /** Upload photos to the environment library (shared by all workspaces). */
 export async function uploadEnvironments(files: File[] | FileList): Promise<Environment[]> {
-  const form = new FormData();
-  for (const file of Array.from(files)) form.append('file', file, file.name);
-  const created = await api.post<Environment[]>('/api/environments/upload', form);
+  const created = await uploadInBatches<Environment>(files, '/api/environments/upload', 'Uploading environments');
   queryClient.invalidateQueries({ queryKey: keys.environments });
   return created;
 }

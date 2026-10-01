@@ -39,6 +39,8 @@ interface State {
   createOpen: boolean; // mobile create sheet
   /** The result last used for Recreate; the reference picker offers it first. */
   recreatedFrom: Asset | null;
+  /** A multi-file upload in progress (shown as a progress pill). */
+  upload: { done: number; total: number; label: string } | null;
   toasts: Toast[];
   setWorkspace: (id: string) => void;
   patchDraft: (patch: Partial<Draft>) => void;
@@ -79,6 +81,7 @@ export const useStore = create<State>((set, get) => ({
   modal: null,
   createOpen: false,
   recreatedFrom: null,
+  upload: null,
   toasts: [],
   setWorkspace: id => {
     if (get().workspaceId === id) return;

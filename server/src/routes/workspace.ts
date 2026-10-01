@@ -12,6 +12,14 @@ const ELEMENT_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 
 const uid = (request: FastifyRequest) => request.userId!;
 
+/** The user's environment for a stored photo: the existing one with the same file, or a new one. */
+export async function environmentFor(userId: string, media: { kind: string; name: string; file: string; thumb: string | null; mime: string; width: number | null; height: number | null }) {
+  return (await one('select * from environments where user_id = $1 and file = $2 order by created_at limit 1', [userId, media.file]))
+    || one(
+      `insert into environments (user_id, kind, name, file, thumb, mime, width, height) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
+      [userId, media.kind, media.name, media.file, media.thumb, media.mime, media.width, media.height]);
+}
+
 /** Create a user's workspace (also used for a new user's first workspace). */
 export async function createWorkspace(userId: string, name: string, imageDir?: string, videoDir?: string) {
   const base = folderSlug(name);
@@ -172,6 +180,18 @@ export function workspaceRoutes(app: FastifyInstance) {
     if (action === 'model' || action === 'unmodel') {
       const updated = await q('update refs set is_model_ref = $2 where id = any($1::uuid[]) returning id', [list, action === 'model']);
       return { count: updated.length };
+    }
+    if (action === 'environments') {
+      // Move photos into the environment library. The reference itself stays (linked and hidden from the
+      // workspace lists), so elements and past generations that use it keep working.
+      let count = 0;
+      for (const ref of await q('select * from refs where id = any($1::uuid[]) and kind = $2', [list, 'image'])) {
+        const env = await environmentFor(uid(request), ref);
+        await q('update refs set source_environment_id = $2, is_model_ref = false where id = $1', [ref.id, env.id]);
+        count++;
+      }
+      if (!count) bad('Only photos can go into the environment library.');
+      return { count, skipped: list.length - count };
     }
     bad('Unknown action.');
   });

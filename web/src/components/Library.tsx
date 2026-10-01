@@ -2,16 +2,16 @@ import { clsx } from 'clsx';
 import { AtSign, CheckSquare, Folder as FolderIcon, Loader2, MapPin, Pencil, Plus, Sparkles, Star, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { addRefsToDraft, environmentRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
+import { addRefsToDraft, assetsToEnvironments, environmentRefs, moveEnvironments, moveRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
 import { useFileDrop, usePasteFiles } from '../lib/fileInput';
-import { keys, queryClient, useAssets, useElements, useEnvironments, useFolders, useRefs } from '../lib/queries';
+import { keys, queryClient, useAssets, useElements, useEnvironments, useFolders, useRefs, useWorkspaces } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
 import type { Asset, Element, Environment, Ref } from '../lib/types';
 import { AudioFace, MediaTile, Preview, envItem, itemsToRefs, useInfiniteSentinel, type Item } from './RefPicker';
 import { Button, Empty, Field, IconButton, Modal, Segmented, Spinner, inputClass } from './ui';
 
-/** Pick generated photos (by folder) and file them under Model refs. */
-function AddFromGenerated({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+/** Pick generated photos (by folder) and file them under Model refs or in the environment library. */
+function AddFromGenerated({ open, onClose, onAdded, target = 'model' }: { open: boolean; onClose: () => void; onAdded: () => void; target?: 'model' | 'environments' }) {
   const { workspaceId: ws, toast } = useStore();
   const [folder, setFolder] = useState('all');
   const [picked, setPicked] = useState<string[]>([]);
@@ -33,9 +33,12 @@ function AddFromGenerated({ open, onClose, onAdded }: { open: boolean; onClose: 
   async function add() {
     setBusy(true);
     try {
-      await api.post('/api/refs/from-assets', { assetIds: picked, modelRef: true });
-      queryClient.invalidateQueries({ queryKey: keys.refs(ws!) });
-      toast(`Added ${picked.length} to Model refs`, 'ok');
+      if (target === 'environments') await assetsToEnvironments(picked);
+      else {
+        await api.post('/api/refs/from-assets', { assetIds: picked, modelRef: true });
+        queryClient.invalidateQueries({ queryKey: keys.refs(ws!) });
+      }
+      toast(`Added ${picked.length} to ${target === 'environments' ? 'Environments' : 'Model refs'}`, 'ok');
       onAdded();
       onClose();
     } catch (error) { toast(errorText(error), 'error'); }
@@ -43,11 +46,11 @@ function AddFromGenerated({ open, onClose, onAdded }: { open: boolean; onClose: 
   }
 
   return (
-    <Modal open={open} onClose={onClose} full title="Add generated photos to Model refs" footer={
+    <Modal open={open} onClose={onClose} full title={`Add generated photos to ${target === 'environments' ? 'Environments' : 'Model refs'}`} footer={
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted">{picked.length ? `${picked.length} selected` : 'Tap photos to select'}</span>
         <Button variant="primary" className="ml-auto" disabled={!picked.length} loading={busy} onClick={add}>
-          <Star className="size-4" />Add{picked.length ? ` ${picked.length}` : ''}
+          {target === 'environments' ? <MapPin className="size-4" /> : <Star className="size-4" />}Add{picked.length ? ` ${picked.length}` : ''}
         </Button>
       </div>
     }>
@@ -122,7 +125,7 @@ function RefsTab() {
   async function onFiles(files: File[] | FileList | null) {
     if (!files?.length) return;
     setUploading(true);
-    try { await uploadRefs(ws!, files, tab === 'model'); toast(`Uploaded ${files.length} file${files.length === 1 ? '' : 's'}`); }
+    try { const added = await uploadRefs(ws!, files, tab === 'model'); if (added.length) toast(`Uploaded ${added.length} file${added.length === 1 ? '' : 's'}`, 'ok'); }
     catch (error) { toast(errorText(error), 'error'); }
     finally { setUploading(false); if (input.current) input.current.value = ''; }
   }
@@ -152,6 +155,18 @@ function RefsTab() {
       setAllIds(ids);
       setSelected(ids);
     } catch (error) { toast(errorText(error), 'error'); }
+  }
+
+  async function move(ids: string[], to: 'model' | 'uploads' | 'environments') {
+    setBusy(to);
+    try {
+      const { count, skipped } = await moveRefs(ws!, ids, to);
+      toast(`Moved ${count} to ${to === 'model' ? 'Model refs' : to === 'uploads' ? 'Uploads' : 'Environments'}${skipped ? ` (${skipped} skipped: only photos go to Environments)` : ''}`, 'ok');
+      setSelected(s => s.filter(id => !ids.includes(id)));
+      if (detail && ids.includes(detail.id) && to === 'environments') setDetail(null);
+      queryClient.invalidateQueries({ queryKey: keys.elements(ws!) });
+    } catch (error) { toast(errorText(error), 'error'); }
+    finally { setBusy(null); }
   }
 
   async function bulk(action: 'delete' | 'model' | 'unmodel') {
@@ -214,8 +229,9 @@ function RefsTab() {
           <Button size="sm" variant="ghost" onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button size="sm" disabled={!selected.length} loading={busy === 'use'} onClick={useSelected}>Use</Button>
-            <Button size="sm" disabled={!selected.length} loading={busy === 'model'} onClick={() => bulk('model')}><Star className="size-4" />Model ref</Button>
-            <Button size="sm" disabled={!selected.length} loading={busy === 'unmodel'} onClick={() => bulk('unmodel')}>Unmark</Button>
+            {tab !== 'model' && <Button size="sm" disabled={!selected.length} loading={busy === 'model'} onClick={() => move(selected, 'model')} title="Move to Model refs"><Star className="size-4" />To Model refs</Button>}
+            {tab !== 'uploads' && <Button size="sm" disabled={!selected.length} loading={busy === 'uploads'} onClick={() => move(selected, 'uploads')} title="Move to Uploads"><Upload className="size-4" />To Uploads</Button>}
+            <Button size="sm" disabled={!selected.length} loading={busy === 'environments'} onClick={() => move(selected, 'environments')} title="Move to your environment library (shared by all workspaces)"><MapPin className="size-4" />To Environments</Button>
             <Button size="sm" variant="danger" disabled={!selected.length} loading={busy === 'delete'} onClick={() => bulk('delete')}><Trash2 className="size-4" />Delete</Button>
           </div>
         </div>
@@ -231,6 +247,11 @@ function RefsTab() {
           <Button size="sm" variant={detail.isModelRef ? 'primary' : 'outline'} onClick={() => patch(detail, { isModelRef: !detail.isModelRef })}>
             <Star className={clsx('size-4', detail.isModelRef && 'fill-current')} /> Model ref
           </Button>
+          {detail.kind === 'image' && (
+            <Button size="sm" variant="outline" loading={busy === 'environments'} onClick={() => move([detail.id], 'environments')} title="Move to your environment library (shared by all workspaces)">
+              <MapPin className="size-4" />To Environments
+            </Button>
+          )}
           <Button size="sm" onClick={() => { if (addRefsToDraft([detail])) useStore.getState().set({ modal: null }); }}>Use</Button>
           <IconButton label="Delete reference" className="size-9 text-danger" onClick={() => remove(detail)}><Trash2 className="size-4" /></IconButton>
           <IconButton label="Close" className="size-9" onClick={() => setDetail(null)}><X className="size-4" /></IconButton>
@@ -288,7 +309,7 @@ function EnvironmentsTab() {
   async function onFiles(files: File[] | FileList | null) {
     if (!files?.length) return;
     setUploading(true);
-    try { const added = await uploadEnvironments(files); toast(`Added ${added.length} environment${added.length === 1 ? '' : 's'}`, 'ok'); }
+    try { const added = await uploadEnvironments(files); if (added.length) toast(`Added ${added.length} environment${added.length === 1 ? '' : 's'}`, 'ok'); }
     catch (error) { toast(errorText(error), 'error'); }
     finally { setUploading(false); if (input.current) input.current.value = ''; }
   }
@@ -307,6 +328,19 @@ function EnvironmentsTab() {
       setSelected(s => s.filter(id => !ids.includes(id)));
       if (detail && ids.includes(detail.id)) setDetail(null);
       refresh();
+    } catch (error) { toast(errorText(error), 'error'); }
+    finally { setBusy(null); }
+  }
+  const { data: workspaces } = useWorkspaces();
+  const wsName = workspaces?.find(w => w.id === ws)?.name || 'this workspace';
+  const [addGenerated, setAddGenerated] = useState(false);
+  async function moveTo(ids: string[], to: 'model' | 'uploads') {
+    setBusy(to);
+    try {
+      const { count } = await moveEnvironments(ws!, ids, to);
+      toast(`Moved ${count} to ${wsName} · ${to === 'model' ? 'Model refs' : 'Uploads'}`, 'ok');
+      setSelected(s => s.filter(id => !ids.includes(id)));
+      if (detail && ids.includes(detail.id)) setDetail(null);
     } catch (error) { toast(errorText(error), 'error'); }
     finally { setBusy(null); }
   }
@@ -341,15 +375,21 @@ function EnvironmentsTab() {
           <Button variant={selecting ? 'subtle' : 'ghost'} onClick={() => (selecting ? exitSelect() : (setSelecting(true), setDetail(null)))}>
             <CheckSquare className="size-4" />{selecting ? 'Done' : 'Select'}
           </Button>
+          <Button variant="outline" onClick={() => setAddGenerated(true)} title="Add generated photos to Environments">
+            <Sparkles className="size-4" /><span className="hidden sm:inline">Add from generated</span><span className="sm:hidden">Generated</span>
+          </Button>
           <Button variant="outline" onClick={() => input.current?.click()} loading={uploading}>{!uploading && <Upload className="size-4" />} Upload</Button>
         </div>
       </div>
+      <AddFromGenerated open={addGenerated} onClose={() => setAddGenerated(false)} onAdded={() => {}} target="environments" />
       {selecting && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-4 py-2.5">
           <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
           <Button size="sm" variant="ghost" onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button size="sm" disabled={!selected.length} loading={busy === 'use'} onClick={() => use(selected)}>Use</Button>
+            <Button size="sm" disabled={!selected.length} loading={busy === 'model'} onClick={() => moveTo(selected, 'model')} title={`Move to ${wsName} · Model refs (out of the shared library)`}><Star className="size-4" />To Model refs</Button>
+            <Button size="sm" disabled={!selected.length} loading={busy === 'uploads'} onClick={() => moveTo(selected, 'uploads')} title={`Move to ${wsName} · Uploads (out of the shared library)`}><Upload className="size-4" />To Uploads</Button>
             <Button size="sm" variant="danger" disabled={!selected.length} loading={busy === 'delete'} onClick={() => remove(selected)}><Trash2 className="size-4" />Delete</Button>
           </div>
         </div>
@@ -359,6 +399,8 @@ function EnvironmentsTab() {
           <img src={detail.thumbUrl || ''} alt="" className="size-12 rounded-lg object-cover" />
           <input className={clsx(inputClass, 'h-10 w-auto min-w-0 flex-1')} defaultValue={detail.name} key={detail.id}
             onBlur={e => e.target.value.trim() && e.target.value !== detail.name && rename(detail, e.target.value)} />
+          <Button size="sm" variant="outline" loading={busy === 'model'} onClick={() => moveTo([detail.id], 'model')} title={`Move to ${wsName} · Model refs`}><Star className="size-4" />To Model refs</Button>
+          <Button size="sm" variant="outline" loading={busy === 'uploads'} onClick={() => moveTo([detail.id], 'uploads')} title={`Move to ${wsName} · Uploads`}><Upload className="size-4" />To Uploads</Button>
           <Button size="sm" loading={busy === 'use'} onClick={() => use([detail.id])}>Use</Button>
           <IconButton label="Delete environment" className="size-9 text-danger" onClick={() => remove([detail.id])}><Trash2 className="size-4" /></IconButton>
           <IconButton label="Close" className="size-9" onClick={() => setDetail(null)}><X className="size-4" /></IconButton>
@@ -426,7 +468,7 @@ function ElementEditor({ element, onDone }: { element: Element | null; onDone: (
         : (await uploadRefs(ws!, files, tab === 'model')).filter(r => r.kind === 'image').map(toItem.ref);
       setPicked(p => [...p, ...images.filter(i => !p.some(x => sameMedia(x, i)))]);
       if (tab === 'generated') setTab('uploads');
-      toast(`Uploaded and added ${images.length}`, 'ok');
+      if (images.length) toast(`Uploaded and added ${images.length}`, 'ok');
     } catch (error) { toast(errorText(error), 'error'); }
     finally { setUploading(false); if (fileInput.current) fileInput.current.value = ''; }
   }

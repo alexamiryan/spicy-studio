@@ -1,10 +1,8 @@
 import { clsx } from 'clsx';
-import {
-  Check, ChevronUp, Clapperboard, Star, Download, FolderInput, ImagePlus, Info as InfoIcon, Loader2, Pause, Play, RotateCcw, Save, Trash2, Volume2, VolumeX, X,
-} from 'lucide-react';
+import { Check, ChevronUp, Clapperboard, Download, FolderInput, ImagePlus, Info as InfoIcon, Loader2, MapPin, Pause, Play, RotateCcw, Save, Star, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
+import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
 import { useStore } from '../lib/store';
 import type { Asset } from '../lib/types';
 import { Info, useSaveTarget } from './Viewer';
@@ -120,10 +118,16 @@ function InfoSheet({ asset, onClose }: { asset: Asset; onClose: () => void }) {
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-5 pb-6">
           {asset.kind === 'image' && (
-            <button onClick={() => addToModelRefs(asset)}
-              className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-line-strong bg-panel-2 text-sm font-medium active:bg-white/8">
-              <Star className="size-4 text-accent" />Add to Model refs
-            </button>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <button onClick={() => addToModelRefs(asset)}
+                className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line-strong bg-panel-2 text-sm font-medium active:bg-white/8">
+                <Star className="size-4 text-accent" />Model refs
+              </button>
+              <button onClick={() => addToEnvironments(asset)}
+                className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line-strong bg-panel-2 text-sm font-medium active:bg-white/8">
+                <MapPin className="size-4 text-accent" />Environments
+              </button>
+            </div>
           )}
           <Info generationId={asset.generationId} />
         </div>

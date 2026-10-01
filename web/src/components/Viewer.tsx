@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
-  Check, ChevronLeft, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
+  Check, ChevronLeft, MapPin, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
-import { addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
+import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
 import { formatCost } from '../lib/models';
 import { saveFolderLabel, useMySettings, useWorkspaces } from '../lib/queries';
 import { useStore } from '../lib/store';
@@ -205,6 +205,9 @@ function DesktopViewer() {
               <SecondaryAction icon={<ImagePlus className="size-4" />} label="As ref" onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'} title="Use as reference in the create box" />
               {asset.kind === 'image' && (
                 <SecondaryAction icon={<Star className="size-4" />} label="Model ref" onClick={() => addToModelRefs(asset)} title="Add to Model refs" />
+              )}
+              {asset.kind === 'image' && (
+                <SecondaryAction icon={<MapPin className="size-4" />} label="Environment" onClick={() => addToEnvironments(asset)} title="Add to your environment library (shared by all workspaces)" />
               )}
               <SecondaryAction icon={<FolderInput className="size-4" />} label="Move" onClick={() => set({ modal: { type: 'move', assetIds: [asset.id] } })} title="Move to another folder" />
               <SecondaryAction icon={<Download className="size-4" />} label="Download" onClick={() => downloadAsset(asset)} title="Download to this device" />

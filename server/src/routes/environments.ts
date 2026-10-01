@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { one, q } from '../db.js';
 import { ProviderError } from '../providers/types.js';
-import { ownWorkspace } from '../services/access.js';
+import { ownedIds, ownWorkspace } from '../services/access.js';
 import { collectGarbage, mimeFromName, storeStream } from '../services/media.js';
 import { decodeCursor, encodeCursor, environmentDto, refDto } from './dto.js';
+import { environmentFor } from './workspace.js';
 
 const bad = (message: string, status = 400): never => { throw new ProviderError(message, status); };
 const cleanName = (value: unknown, max = 80) => String(value ?? '').replace(/[\x00-\x1f]/g, '').trim().slice(0, max);
@@ -44,11 +45,8 @@ export function environmentRoutes(app: FastifyInstance) {
         bad(`${part.filename} is not a photo that can be read.`);
       }
       const name = cleanName(part.filename.replace(/\.[^.]+$/, ''), 80) || 'Environment';
-      const row = await one(
-        `insert into environments (user_id, kind, name, file, thumb, mime, width, height)
-         values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-        [uid(request), stored.kind, name, stored.file, stored.thumb, stored.mime, stored.width, stored.height]);
-      created.push(environmentDto(row));
+      // The same photo uploaded again (e.g. retrying a big selection) is not added twice.
+      created.push(environmentDto(await environmentFor(uid(request), { ...stored, name })));
     }
     if (!created.length) bad('Choose a photo to upload.');
     return created;
@@ -66,10 +64,48 @@ export function environmentRoutes(app: FastifyInstance) {
   app.post('/api/environments/delete', async request => {
     const ids = ((request.body as any)?.ids || []).map(String).filter((id: string) => UUID.test(id));
     if (!ids.length) bad('Select something first.');
-    // References already made from these photos stay in their workspaces (and keep their files).
+    // References already made from these photos stay in their workspaces (hidden, still linked) and keep their files.
     const removed = await q<{ file: string }>('delete from environments where user_id = $1 and id = any($2::uuid[]) returning file', [uid(request), ids]);
     collectGarbage(removed.map(r => r.file)).catch(() => {});
     return { deleted: removed.length };
+  });
+
+  /** Move environments into a workspace's Model refs or Uploads (out of the shared library). */
+  app.post('/api/environments/move', async request => {
+    const { workspaceId, ids, to } = (request.body || {}) as { workspaceId?: string; ids?: string[]; to?: string };
+    await ownWorkspace(uid(request), workspaceId);
+    if (to !== 'model' && to !== 'uploads') bad('Choose Model refs or Uploads.');
+    const wanted = (ids || []).map(String).filter(id => UUID.test(id));
+    const envs = await q('select * from environments where user_id = $1 and id = any($2::uuid[])', [uid(request), wanted]);
+    if (!envs.length) bad('Select something first.');
+    for (const env of envs) {
+      // Reuse this workspace's reference for it if there is one; other workspaces keep theirs (hidden).
+      const existing = await one('select id from refs where workspace_id = $1 and source_environment_id = $2 order by created_at limit 1', [workspaceId, env.id]);
+      if (existing) await q('update refs set source_environment_id = null, is_model_ref = $2 where id = $1', [existing.id, to === 'model']);
+      else {
+        await q(
+          `insert into refs (workspace_id, kind, name, file, thumb, mime, width, height, is_model_ref) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [workspaceId, env.kind, env.name, env.file, env.thumb, env.mime, env.width, env.height, to === 'model']);
+      }
+    }
+    await q('delete from environments where user_id = $1 and id = any($2::uuid[])', [uid(request), envs.map(e => e.id)]);
+    return { count: envs.length };
+  });
+
+  /** Add generated photos to the environment library. */
+  app.post('/api/environments/from-assets', async request => {
+    const { assetIds } = (request.body || {}) as { assetIds?: string[] };
+    const ids = await ownedIds(uid(request), 'assets', (assetIds || []).map(String).filter(id => UUID.test(id)));
+    if (!ids.length) bad('Select something first.');
+    const assets = await q(
+      `select a.*, g.model_name from assets a join generations g on g.id = a.generation_id where a.id = any($1::uuid[]) and a.kind = 'image'`, [ids]);
+    if (!assets.length) bad('Only photos can go into the environment library.');
+    const created = [];
+    for (const a of assets) {
+      const name = `${a.model_name} ${new Date(a.created_at).toISOString().slice(0, 10)}`;
+      created.push(environmentDto(await environmentFor(uid(request), { ...a, name })));
+    }
+    return created;
   });
 
   /** Turn environments into references of a workspace (reusing ones made before), in the given order. */

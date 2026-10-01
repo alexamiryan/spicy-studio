@@ -42,6 +42,24 @@ function SetupBanner({ userId }: { userId: string }) {
   );
 }
 
+/** Progress of a multi-file upload, visible from anywhere (uploads keep running while you browse). */
+function UploadPill() {
+  const upload = useStore(s => s.upload);
+  if (!upload) return null;
+  const pct = Math.round((upload.done / Math.max(upload.total, 1)) * 100);
+  return (
+    <div className="pb-safe pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3">
+      <div className="mb-3 w-72 max-w-full overflow-hidden rounded-2xl border border-line bg-panel-2 shadow-xl">
+        <div className="flex items-center justify-between gap-2 px-4 py-2 text-sm">
+          <span className="truncate">{upload.label}</span>
+          <span className="tabular-nums text-muted">{upload.done} / {upload.total}</span>
+        </div>
+        <div className="h-1 bg-white/10"><div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} /></div>
+      </div>
+    </div>
+  );
+}
+
 /** Shown when the server runs a newer version than this tab (e.g. a home-screen app left open). */
 function UpdateBar() {
   const available = useUpdateAvailable();
@@ -90,6 +108,7 @@ function Studio({ username, userId }: { username?: string; userId: string }) {
   return (
     <div className="min-h-full">
       <UpdateBar />
+      <UploadPill />
       <Header username={username} />
       <SetupBanner userId={userId} />
       <div className="flex">
