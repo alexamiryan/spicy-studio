@@ -332,27 +332,51 @@ export class HiggsfieldProvider implements Provider {
     }
   }
 
-  private async allModels(): Promise<ModelInfo[]> {
-    if (this.catalog && Date.now() - this.catalog.at < 10 * 60_000) return this.catalog.items;
+  private loadingCatalog?: Promise<ModelInfo[]>;
+
+  /**
+   * The model catalog, cached for 10 minutes. A failed or empty answer never replaces a good catalog
+   * (a hiccup on Higgsfield's side would otherwise make every model "not available" until the cache expires).
+   */
+  private async allModels(force = false): Promise<ModelInfo[]> {
+    if (!force && this.catalog && Date.now() - this.catalog.at < 10 * 60_000) return this.catalog.items;
+    this.loadingCatalog ||= this.fetchCatalog().finally(() => { this.loadingCatalog = undefined; });
+    try {
+      const items = await this.loadingCatalog;
+      this.catalog = { at: Date.now(), items };
+      return items;
+    } catch (error) {
+      if (this.catalog) {
+        console.warn(`[higgsfield] model list refresh failed, keeping the previous one: ${(error as Error).message}`);
+        return this.catalog.items;
+      }
+      throw error;
+    }
+  }
+
+  private async fetchCatalog(): Promise<ModelInfo[]> {
     const items: ModelInfo[] = [];
     for (const type of ['image', 'video'] as const) {
       let after: string | undefined;
+      let count = 0;
       for (let page = 0; page < 10; page++) {
         const data = await this.call('models_explore', { action: 'list', type, limit: 100, ...(after ? { after } : {}) });
-        for (const item of data?.items || []) if (item?.id) items.push(normalizeHiggsfieldModel(item));
+        for (const item of data?.items || []) if (item?.id) { items.push(normalizeHiggsfieldModel(item)); count++; }
         after = data?.next_page_token;
         if (!data?.has_more || !after) break;
       }
+      if (!count) throw new ProviderError(`Higgsfield returned no ${type} models. Try again in a moment.`);
     }
-    this.catalog = { at: Date.now(), items };
     return items;
   }
 
   async listModels(modality: Modality) { return (await this.allModels()).filter(m => m.modality === modality); }
 
   async getModel(model: string) {
-    const found = (await this.allModels()).find(m => m.model === model);
-    if (!found) throw new ProviderError(`Higgsfield model ${model} is not available.`, 404);
+    let found = (await this.allModels()).find(m => m.model === model);
+    // Not in the cached list: fetch a fresh one before calling it unavailable.
+    if (!found && (!this.catalog || Date.now() - this.catalog.at > 30_000)) found = (await this.allModels(true)).find(m => m.model === model);
+    if (!found) throw new ProviderError(`Higgsfield model ${model} is not available right now.`, 404);
     return found;
   }
 
