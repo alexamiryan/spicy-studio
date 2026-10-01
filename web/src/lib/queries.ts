@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery, QueryClient } from '@tanstack/react-query';
 import { api, qs } from './api';
+import { checkForUpdate } from './update';
 import type {
   AuthStatus, MySettings, Asset, Balance, Element, Folder, Generation, Modality, ModelGroup, Page, ProviderStatus, Ref, Session, Workspace,
 } from './types';
@@ -94,6 +95,7 @@ export function startLiveUpdates() {
     source = new EventSource('/api/events');
     source.addEventListener('change', refreshLive);
     source.addEventListener('open', refreshLive);
+    source.addEventListener('open', () => checkForUpdate()); // the server restarts on every update
   };
   const onVisible = () => {
     if (document.visibilityState !== 'visible') return;

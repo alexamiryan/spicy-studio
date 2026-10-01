@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { registerAuth, seedAdmin } from './auth.js';
@@ -66,6 +66,13 @@ generationRoutes(app);
 
 app.get('/healthz', async () => ({ ok: true }));
 app.get('/api/config', async () => ({ exportRoot: config.exportRootLabel }));
+
+// The web build this server serves: the hashed name of its main script. Open apps compare it with the
+// script they are running and offer a refresh when it differs (installed PWAs never reload by themselves).
+const webVersion = hasWeb
+  ? /\/assets\/[\w.-]+\.js/.exec(readFileSync(path.join(config.webDist, 'index.html'), 'utf8'))?.[0] || null
+  : null;
+app.get('/api/version', async () => ({ web: webVersion }));
 
 app.setNotFoundHandler((request, reply) => {
   if (request.method === 'GET' && hasWeb && !request.url.startsWith('/api/') && !request.url.startsWith('/media/')) {

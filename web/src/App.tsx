@@ -1,7 +1,8 @@
-import { Sparkles, X } from 'lucide-react';
+import { RefreshCw, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { queryClient, startLiveUpdates, useAuth, useMySettings, useProviders, useWorkspaces } from './lib/queries';
 import { useStore } from './lib/store';
+import { startUpdateChecks, useUpdateAvailable } from './lib/update';
 import { CreateBox } from './components/create/CreateBox';
 import { FolderSidebar, Gallery } from './components/Gallery';
 import { GenerationModal } from './components/GenerationModal';
@@ -41,6 +42,26 @@ function SetupBanner({ userId }: { userId: string }) {
   );
 }
 
+/** Shown when the server runs a newer version than this tab (e.g. a home-screen app left open). */
+function UpdateBar() {
+  const available = useUpdateAvailable();
+  const [hidden, setHidden] = useState(false);
+  if (!available || hidden) return null;
+  return (
+    <div className="pt-safe fixed inset-x-0 top-0 z-[60] flex justify-center px-3 pointer-events-none">
+      <div className="pointer-events-auto mt-2 flex items-center gap-2 rounded-2xl border border-accent/40 bg-panel-2 py-1.5 pl-4 pr-1.5 text-sm shadow-xl">
+        <span>New version available</span>
+        <button onClick={() => window.location.reload()}
+          className="flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3 font-semibold text-accent-fg">
+          <RefreshCw className="size-4" />Refresh
+        </button>
+        <button aria-label="Later" title="Later" onClick={() => setHidden(true)}
+          className="flex size-9 items-center justify-center rounded-xl text-muted hover:bg-white/8 hover:text-fg"><X className="size-4" /></button>
+      </div>
+    </div>
+  );
+}
+
 function Studio({ username, userId }: { username?: string; userId: string }) {
   const { data: workspaces } = useWorkspaces();
   const { workspaceId, setWorkspace, set, toast } = useStore();
@@ -50,6 +71,7 @@ function Studio({ username, userId }: { username?: string; userId: string }) {
   }, [workspaces, workspaceId, setWorkspace]);
 
   useEffect(() => startLiveUpdates(), []);
+  useEffect(() => startUpdateChecks(), []);
 
   // Return from the Higgsfield OAuth redirect.
   useEffect(() => {
@@ -67,6 +89,7 @@ function Studio({ username, userId }: { username?: string; userId: string }) {
 
   return (
     <div className="min-h-full">
+      <UpdateBar />
       <Header username={username} />
       <SetupBanner userId={userId} />
       <div className="flex">
