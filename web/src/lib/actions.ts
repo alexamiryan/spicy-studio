@@ -77,7 +77,7 @@ export function addRefsToDraft(refs: Ref[], fieldKey?: string) {
   const current = draft.refSlots[field.key] || [];
   const fitting = refs.filter(r => r.kind === field.kind && !current.some(c => c.id === r.id));
   const next = [...current, ...fitting];
-  if (next.length > field.max) toast(`${field.label} takes up to ${field.max}. Extra references were skipped.`, 'error');
+  if (next.length > field.max) toast(`${field.label} takes up to ${field.max}, so ${next.length - field.max} weren't attached. They're all saved in References.`, 'error');
   patchDraft({ refSlots: { ...draft.refSlots, [field.key]: next.slice(0, field.max) } });
   return true;
 }

@@ -146,8 +146,9 @@ moving an environment keeps refs made from it hidden (elements and past generati
 Moves: `POST /api/refs/bulk {action: 'environments'}` (ref → library, the ref stays linked),
 `POST /api/environments/move` (library → a workspace's Model refs/Uploads), `POST /api/environments/from-assets`.
 Uploads dedupe by file. File cleanup (`collectGarbage`) and the media guard both account for `environments`.
-The web app uploads in batches of 4 files (`actions.ts: uploadInBatches`): the server accepts at most
-30 files per multipart request.
+Every upload in the web app goes through `actions.ts: uploadInBatches` (4 files per request, progress
+pill, per-file retry); the server's multipart cap (500 files, 200 MB per file) is only a safety limit,
+and files over it are dropped silently by the multipart parser, so never upload big selections in one request.
 
 ### @mentions and elements
 

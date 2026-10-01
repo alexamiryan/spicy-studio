@@ -40,7 +40,8 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, b
 
 await app.register(cookie);
 await app.register(rateLimit, { global: false });
-await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024, files: 30 } });
+// The web app uploads a few files per request; the generous per-request cap is only a safety limit.
+await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024, files: 500 } });
 // Before any route (incl. static media) so every protected path goes through the session check.
 registerAuth(app);
 // Media files are only served to the user who owns them.

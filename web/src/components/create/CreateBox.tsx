@@ -160,7 +160,7 @@ function SettingsList({ model, row }: { model?: ModelInfo; row?: boolean }) {
 function useCreateBoxUploads(pasteEnabled: boolean) {
   const { workspaceId, toast } = useStore();
   const upload = async (files: File[]) => {
-    toast(`Uploading ${files.length} file${files.length === 1 ? '' : 's'}…`);
+    if (files.length === 1) toast('Uploading…'); // bigger selections show the upload progress pill
     try {
       const refs = await uploadRefs(workspaceId!, files);
       // Images go to the main reference input, videos/audio to the first input of their kind.
