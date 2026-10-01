@@ -1,93 +1,32 @@
 import { clsx } from 'clsx';
-import { AtSign, CheckSquare, Folder as FolderIcon, Loader2, MapPin, Pencil, Plus, Sparkles, Star, Trash2, Upload, X } from 'lucide-react';
+import { AtSign, CheckSquare, Folder as FolderIcon, Loader2, MapPin, Pencil, Plus, Star, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { addRefsToDraft, assetsToEnvironments, environmentRefs, moveEnvironments, moveRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
+import { addRefsToDraft, environmentRefs, moveEnvironments, moveRefs, uploadEnvironments, uploadRefs } from '../lib/actions';
 import { useFileDrop, usePasteFiles } from '../lib/fileInput';
 import { keys, queryClient, useAssets, useElements, useEnvironments, useFolders, useRefs, useWorkspaces } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
 import type { Asset, Element, Environment, Ref } from '../lib/types';
 import { AudioFace, MediaTile, Preview, envItem, itemsToRefs, useInfiniteSentinel, type Item } from './RefPicker';
+import { MoveMenu, type MoveTarget } from './MoveMenu';
 import { Button, Empty, Field, IconButton, Modal, Segmented, Spinner, inputClass } from './ui';
 
-/** Pick generated photos (by folder) and file them under Model refs or in the environment library. */
-function AddFromGenerated({ open, onClose, onAdded, target = 'model' }: { open: boolean; onClose: () => void; onAdded: () => void; target?: 'model' | 'environments' }) {
-  const { workspaceId: ws, toast } = useStore();
-  const [folder, setFolder] = useState('all');
-  const [picked, setPicked] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const folders = useFolders(ws);
-  const query = useAssets(open ? ws : null, folder, 'image');
-  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) || [], [query.data]);
-  const sentinel = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (open) setPicked([]); }, [open]);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver(e => { if (e[0].isIntersecting && query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }, { rootMargin: '600px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, open]);
+/** Where workspace references can move (minus the place they're in). */
+function refTargets(current: 'model' | 'uploads' | null, toModel: (ids: string[]) => void, toUploads: (ids: string[]) => void, toEnv: (ids: string[]) => void) {
+  const all: (Omit<MoveTarget, 'onSelect'> & { run: (ids: string[]) => void })[] = [
+    { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: 'Canonical face and body shots', run: toModel },
+    { key: 'uploads', label: 'Uploads', icon: <Upload className="size-4" />, hint: 'Other references of this workspace', run: toUploads },
+    { key: 'environments', label: 'Environments', icon: <MapPin className="size-4" />, hint: 'Shared by all your workspaces (photos only)', run: toEnv },
+  ];
+  return all.filter(t => t.key !== current);
+}
 
-  const allPicked = items.length > 0 && items.every(a => picked.includes(a.id));
-  async function add() {
-    setBusy(true);
-    try {
-      if (target === 'environments') await assetsToEnvironments(picked);
-      else {
-        await api.post('/api/refs/from-assets', { assetIds: picked, modelRef: true });
-        queryClient.invalidateQueries({ queryKey: keys.refs(ws!) });
-      }
-      toast(`Added ${picked.length} to ${target === 'environments' ? 'Environments' : 'Model refs'}`, 'ok');
-      onAdded();
-      onClose();
-    } catch (error) { toast(errorText(error), 'error'); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} full title={`Add generated photos to ${target === 'environments' ? 'Environments' : 'Model refs'}`} footer={
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted">{picked.length ? `${picked.length} selected` : 'Tap photos to select'}</span>
-        <Button variant="primary" className="ml-auto" disabled={!picked.length} loading={busy} onClick={add}>
-          {target === 'environments' ? <MapPin className="size-4" /> : <Star className="size-4" />}Add{picked.length ? ` ${picked.length}` : ''}
-        </Button>
-      </div>
-    }>
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-panel px-4 py-3">
-        <label className="flex h-10 items-center gap-2 rounded-xl border border-line bg-panel-2 px-3 text-sm">
-          <FolderIcon className="size-4 text-muted" />
-          <select className="bg-transparent outline-none" value={folder} onChange={e => setFolder(e.target.value)}>
-            <option value="all">All folders</option>
-            <option value="unsorted">Unsorted</option>
-            {folders.data?.folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </label>
-        {items.length > 1 && (
-          <Button variant="ghost" className="ml-auto" onClick={() => setPicked(allPicked ? [] : items.map(a => a.id))}>
-            {allPicked ? 'Clear' : 'Select all'}
-          </Button>
-        )}
-      </div>
-      <div className="p-4">
-        {query.isLoading ? <div className="flex justify-center py-16"><Spinner /></div> : !items.length ? (
-          <Empty title="No generated photos here">Pick another folder.</Empty>
-        ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {items.map(a => {
-              const index = picked.indexOf(a.id);
-              return (
-                <MediaTile key={a.id} item={{ id: a.id, thumbUrl: a.thumbUrl, url: a.url, kind: a.kind, name: a.modelName }}
-                  selected={index >= 0} badge={index >= 0 ? index + 1 : undefined} saved={a.exported}
-                  onClick={() => setPicked(p => (p.includes(a.id) ? p.filter(x => x !== a.id) : [...p, a.id]))} />
-              );
-            })}
-          </div>
-        )}
-        <div ref={sentinel} className="flex h-10 items-center justify-center">{query.isFetchingNextPage && <Loader2 className="size-5 animate-spin text-muted" />}</div>
-      </div>
-    </Modal>
-  );
+/** Where environment photos can move: this workspace's Model refs or Uploads (out of the shared library). */
+function envTargets(wsName: string, run: (to: 'model' | 'uploads') => void): MoveTarget[] {
+  return [
+    { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: `In ${wsName}`, onSelect: () => run('model') },
+    { key: 'uploads', label: 'Uploads', icon: <Upload className="size-4" />, hint: `In ${wsName}`, onSelect: () => run('uploads') },
+  ];
 }
 
 function RefsTab() {
@@ -96,7 +35,6 @@ function RefsTab() {
   const query = useRefs(ws, tab);
   const items = useMemo(() => query.data?.pages.flatMap(p => p.items) || [], [query.data]);
   const [detail, setDetail] = useState<Ref | null>(null);
-  const [addGenerated, setAddGenerated] = useState(false);
   // Multi-select mode: tiles toggle instead of opening the details bar.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -163,7 +101,7 @@ function RefsTab() {
       const { count, skipped } = await moveRefs(ws!, ids, to);
       toast(`Moved ${count} to ${to === 'model' ? 'Model refs' : to === 'uploads' ? 'Uploads' : 'Environments'}${skipped ? ` (${skipped} skipped: only photos go to Environments)` : ''}`, 'ok');
       setSelected(s => s.filter(id => !ids.includes(id)));
-      if (detail && ids.includes(detail.id) && to === 'environments') setDetail(null);
+      if (detail && ids.includes(detail.id)) setDetail(to === 'environments' || (tab !== 'all') ? null : { ...detail, isModelRef: to === 'model' });
       queryClient.invalidateQueries({ queryKey: keys.elements(ws!) });
     } catch (error) { toast(errorText(error), 'error'); }
     finally { setBusy(null); }
@@ -214,24 +152,19 @@ function RefsTab() {
           <Button variant={selecting ? 'subtle' : 'ghost'} onClick={() => (selecting ? exitSelect() : (setSelecting(true), setDetail(null)))}>
             <CheckSquare className="size-4" />{selecting ? 'Done' : 'Select'}
           </Button>
-          <Button variant="outline" onClick={() => setAddGenerated(true)} title="Add generated photos to Model refs">
-            <Sparkles className="size-4" /><span className="hidden sm:inline">Add from generated</span><span className="sm:hidden">Generated</span>
-          </Button>
           <Button variant="outline" onClick={() => input.current?.click()} loading={uploading}>
             {!uploading && <Upload className="size-4" />} Upload{tab === 'model' ? ' model refs' : ''}
           </Button>
         </div>
       </div>
-      <AddFromGenerated open={addGenerated} onClose={() => setAddGenerated(false)} onAdded={() => setTab('model')} />
       {selecting && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-4 py-2.5">
           <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
           <Button size="sm" variant="ghost" onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button size="sm" disabled={!selected.length} loading={busy === 'use'} onClick={useSelected}>Use</Button>
-            {tab !== 'model' && <Button size="sm" disabled={!selected.length} loading={busy === 'model'} onClick={() => move(selected, 'model')} title="Move to Model refs"><Star className="size-4" />To Model refs</Button>}
-            {tab !== 'uploads' && <Button size="sm" disabled={!selected.length} loading={busy === 'uploads'} onClick={() => move(selected, 'uploads')} title="Move to Uploads"><Upload className="size-4" />To Uploads</Button>}
-            <Button size="sm" disabled={!selected.length} loading={busy === 'environments'} onClick={() => move(selected, 'environments')} title="Move to your environment library (shared by all workspaces)"><MapPin className="size-4" />To Environments</Button>
+            <MoveMenu size="sm" disabled={!selected.length} busy={['model', 'uploads', 'environments'].includes(busy || '')}
+              targets={refTargets(tab === 'all' ? null : tab, ids => move(ids, 'model'), ids => move(ids, 'uploads'), ids => move(ids, 'environments')).map(t => ({ ...t, onSelect: () => t.run(selected) }))} />
             <Button size="sm" variant="danger" disabled={!selected.length} loading={busy === 'delete'} onClick={() => bulk('delete')}><Trash2 className="size-4" />Delete</Button>
           </div>
         </div>
@@ -247,11 +180,9 @@ function RefsTab() {
           <Button size="sm" variant={detail.isModelRef ? 'primary' : 'outline'} onClick={() => patch(detail, { isModelRef: !detail.isModelRef })}>
             <Star className={clsx('size-4', detail.isModelRef && 'fill-current')} /> Model ref
           </Button>
-          {detail.kind === 'image' && (
-            <Button size="sm" variant="outline" loading={busy === 'environments'} onClick={() => move([detail.id], 'environments')} title="Move to your environment library (shared by all workspaces)">
-              <MapPin className="size-4" />To Environments
-            </Button>
-          )}
+          <MoveMenu size="sm" busy={['model', 'uploads', 'environments'].includes(busy || '')}
+            targets={refTargets(detail.isModelRef ? 'model' : 'uploads', ids => move(ids, 'model'), ids => move(ids, 'uploads'), ids => move(ids, 'environments'))
+              .filter(t => t.key !== 'environments' || detail.kind === 'image').map(t => ({ ...t, onSelect: () => t.run([detail.id]) }))} />
           <Button size="sm" onClick={() => { if (addRefsToDraft([detail])) useStore.getState().set({ modal: null }); }}>Use</Button>
           <IconButton label="Delete reference" className="size-9 text-danger" onClick={() => remove(detail)}><Trash2 className="size-4" /></IconButton>
           <IconButton label="Close" className="size-9" onClick={() => setDetail(null)}><X className="size-4" /></IconButton>
@@ -333,7 +264,6 @@ function EnvironmentsTab() {
   }
   const { data: workspaces } = useWorkspaces();
   const wsName = workspaces?.find(w => w.id === ws)?.name || 'this workspace';
-  const [addGenerated, setAddGenerated] = useState(false);
   async function moveTo(ids: string[], to: 'model' | 'uploads') {
     setBusy(to);
     try {
@@ -375,21 +305,16 @@ function EnvironmentsTab() {
           <Button variant={selecting ? 'subtle' : 'ghost'} onClick={() => (selecting ? exitSelect() : (setSelecting(true), setDetail(null)))}>
             <CheckSquare className="size-4" />{selecting ? 'Done' : 'Select'}
           </Button>
-          <Button variant="outline" onClick={() => setAddGenerated(true)} title="Add generated photos to Environments">
-            <Sparkles className="size-4" /><span className="hidden sm:inline">Add from generated</span><span className="sm:hidden">Generated</span>
-          </Button>
           <Button variant="outline" onClick={() => input.current?.click()} loading={uploading}>{!uploading && <Upload className="size-4" />} Upload</Button>
         </div>
       </div>
-      <AddFromGenerated open={addGenerated} onClose={() => setAddGenerated(false)} onAdded={() => {}} target="environments" />
       {selecting && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-4 py-2.5">
           <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
           <Button size="sm" variant="ghost" onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button size="sm" disabled={!selected.length} loading={busy === 'use'} onClick={() => use(selected)}>Use</Button>
-            <Button size="sm" disabled={!selected.length} loading={busy === 'model'} onClick={() => moveTo(selected, 'model')} title={`Move to ${wsName} · Model refs (out of the shared library)`}><Star className="size-4" />To Model refs</Button>
-            <Button size="sm" disabled={!selected.length} loading={busy === 'uploads'} onClick={() => moveTo(selected, 'uploads')} title={`Move to ${wsName} · Uploads (out of the shared library)`}><Upload className="size-4" />To Uploads</Button>
+            <MoveMenu size="sm" disabled={!selected.length} busy={busy === 'model' || busy === 'uploads'} targets={envTargets(wsName, to => moveTo(selected, to))} />
             <Button size="sm" variant="danger" disabled={!selected.length} loading={busy === 'delete'} onClick={() => remove(selected)}><Trash2 className="size-4" />Delete</Button>
           </div>
         </div>
@@ -399,8 +324,7 @@ function EnvironmentsTab() {
           <img src={detail.thumbUrl || ''} alt="" className="size-12 rounded-lg object-cover" />
           <input className={clsx(inputClass, 'h-10 w-auto min-w-0 flex-1')} defaultValue={detail.name} key={detail.id}
             onBlur={e => e.target.value.trim() && e.target.value !== detail.name && rename(detail, e.target.value)} />
-          <Button size="sm" variant="outline" loading={busy === 'model'} onClick={() => moveTo([detail.id], 'model')} title={`Move to ${wsName} · Model refs`}><Star className="size-4" />To Model refs</Button>
-          <Button size="sm" variant="outline" loading={busy === 'uploads'} onClick={() => moveTo([detail.id], 'uploads')} title={`Move to ${wsName} · Uploads`}><Upload className="size-4" />To Uploads</Button>
+          <MoveMenu size="sm" busy={busy === 'model' || busy === 'uploads'} targets={envTargets(wsName, to => moveTo([detail.id], to))} />
           <Button size="sm" loading={busy === 'use'} onClick={() => use([detail.id])}>Use</Button>
           <IconButton label="Delete environment" className="size-9 text-danger" onClick={() => remove([detail.id])}><Trash2 className="size-4" /></IconButton>
           <IconButton label="Close" className="size-9" onClick={() => setDetail(null)}><X className="size-4" /></IconButton>

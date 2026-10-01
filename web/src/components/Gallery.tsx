@@ -1,16 +1,16 @@
 import { clsx } from 'clsx';
 import {
-  AlertTriangle, Check, CheckSquare, Clock, Film, Folder as FolderIcon, FolderInput, FolderPlus, Images, Inbox,
-  ImagePlus, Loader2, MoreHorizontal, Pencil, Play, RefreshCw, RotateCcw, Save, Trash2, X,
+  AlertTriangle, Check, CheckSquare, Clock, Film, Folder as FolderIcon, FolderInput, FolderPlus, ImagePlus, Images, Inbox, Loader2, MapPin, MoreHorizontal, Pencil, Play, RefreshCw, RotateCcw, Save, Star, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { assetToRef, createFolder, deleteAssets, dismissGeneration, moveAssets, recreate, retryGeneration, saveAsset } from '../lib/actions';
+import { assetToRef, assetsToEnvironments, createFolder, deleteAssets, dismissGeneration, moveAssets, recreate, retryGeneration, saveAsset } from '../lib/actions';
 import { formatCost } from '../lib/models';
 import { invalidateGallery, keys, queryClient, useActive, useAssets, useFolders } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
 import type { Asset, Folder, Generation } from '../lib/types';
 import { Button, Empty, IconButton, Popover, Segmented, Spinner, useLongPress } from './ui';
+import { MoveMenu } from './MoveMenu';
 
 const DRAG_TYPE = 'application/x-studio-assets';
 
@@ -379,8 +379,23 @@ function SelectionBar() {
   const { selected, selecting, clearSelection, set, workspaceId, view, folder, kind, toast } = useStore();
   const [allIds, setAllIds] = useState<string[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
+  const [moving, setMoving] = useState(false);
   useEffect(() => setAllIds(null), [view, folder, kind, workspaceId]);
   if (!selecting) return null;
+
+  // Results stay in the timeline; their photos are filed in a reference library.
+  async function toLibrary(to: 'model' | 'environments') {
+    setMoving(true);
+    try {
+      const count = to === 'environments'
+        ? (await assetsToEnvironments(selected)).length
+        : (await api.post<unknown[]>('/api/refs/from-assets', { assetIds: selected, modelRef: true })).length;
+      if (to === 'model') queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId!) });
+      toast(`Added ${count} photo${count === 1 ? '' : 's'} to ${to === 'model' ? 'Model refs' : 'Environments'}${count < selected.length ? ` (${selected.length - count} videos skipped)` : ''}`, 'ok');
+      clearSelection();
+    } catch (error) { toast(errorText(error), 'error'); }
+    finally { setMoving(false); }
+  }
   const allSelected = allIds !== null && allIds.length > 0 && allIds.every(id => selected.includes(id));
 
   async function selectAll() {
@@ -401,7 +416,11 @@ function SelectionBar() {
         <IconButton label="Cancel selection" onClick={clearSelection}><X className="size-5" /></IconButton>
         <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
         <Button variant="ghost" loading={loadingAll} onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
-        <Button disabled={!selected.length} onClick={() => set({ modal: { type: 'move', assetIds: selected } })}><FolderInput className="size-4" /> Move</Button>
+        <MoveMenu side="top" align="left" disabled={!selected.length} busy={moving} targets={[
+          { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: selected } }) },
+          { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: 'Photos only; results stay in your timeline', onSelect: () => toLibrary('model') },
+          { key: 'environments', label: 'Environments', icon: <MapPin className="size-4" />, hint: 'Photos only; shared by all your workspaces', onSelect: () => toLibrary('environments') },
+        ]} />
         <Button variant="danger" disabled={!selected.length} onClick={() => deleteAssets(workspaceId!, selected)}><Trash2 className="size-4" /><span className="hidden sm:inline">Delete</span></Button>
       </div>
     </div>

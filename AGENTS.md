@@ -212,7 +212,8 @@ the element's photos to the primary image field and becomes `image 3, image 4`. 
   sticky headers (iOS renders it washed out).
 - Dark theme only; colors come from Tailwind theme tokens in `index.css` (`bg-panel`, `text-muted`,
   `accent`…).
-- Reuse the shared pieces: `MediaTile`, `Preview`, `AudioFace` (RefPicker.tsx), `Modal`, `Button`,
+- Reuse the shared pieces: `MediaTile`, `Preview`, `AudioFace` (RefPicker.tsx), `MoveMenu` (the one "Move to"
+  button for any selection), `Modal`, `Button`,
   `Segmented`, `Field` (ui.tsx), `useFileDrop` / `usePasteFiles`.
 
 ## Code style

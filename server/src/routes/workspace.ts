@@ -241,8 +241,10 @@ export function workspaceRoutes(app: FastifyInstance) {
   // Several results at once (e.g. "Add from generated" into Model refs).
   app.post('/api/refs/from-assets', async request => {
     const { assetIds, modelRef } = (request.body || {}) as { assetIds?: string[]; modelRef?: boolean };
-    const ids = (assetIds || []).map(String).filter(id => /^[0-9a-f-]{36}$/.test(id));
-    if (!ids.length) bad('Select something first.');
+    let ids = await ownedIds(uid(request), 'assets', (assetIds || []).map(String).filter(id => /^[0-9a-f-]{36}$/.test(id)));
+    // Model refs are photos: videos in a mixed selection are skipped.
+    if (modelRef === true) ids = (await q<{ id: string }>(`select id from assets where id = any($1::uuid[]) and kind = 'image'`, [ids])).map(r => r.id);
+    if (!ids.length) bad(modelRef === true ? 'Only photos can be model refs.' : 'Select something first.');
     const refs = [];
     for (const id of ids) refs.push(refDto(await refFromAsset(uid(request), id, modelRef === true)));
     return refs;
