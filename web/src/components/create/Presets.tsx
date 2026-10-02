@@ -63,7 +63,7 @@ function PresetRow({ preset, active, onLoad }: { preset: Preset; active: boolean
  * Presets: named create-box states ("Mirror selfie at home", "Outdoor posing"…) for the current workspace
  * and photo/video mode. Loading one fills the create box like Recreate, without hunting for an old result.
  */
-export function PresetsControl({ row }: { row?: boolean }) {
+export function PresetsControl({ row, className }: { row?: boolean; className?: string }) {
   const { workspaceId: ws, toast } = useStore();
   const modality = useStore(s => s.draft.modality);
   const activeEntry = useStore(s => s.activePreset[s.draft.modality]);
@@ -105,8 +105,8 @@ export function PresetsControl({ row }: { row?: boolean }) {
             {edited && <span className="shrink-0 rounded-md bg-amber-400/15 px-1.5 text-xs text-amber-300">edited</span>}
             <ChevronDown className="size-4 text-faint" />
           </button>
-        : <Chip active={Boolean(active)} onClick={() => setOpen(!open)} title={`Saved ${kind} presets for this workspace`}>
-            <Bookmark className="size-4" /><span className="max-w-36 truncate">{active?.name || 'Presets'}</span>
+        : <Chip active={Boolean(active)} onClick={() => setOpen(!open)} title={active ? `Preset: ${active.name}` : `Saved ${kind} presets for this workspace`} className={className}>
+            <Bookmark className="size-4 shrink-0" /><span className="min-w-0 truncate">{active?.name || 'Presets'}</span>
             {edited && <span title="Changed since it was loaded" className="size-1.5 shrink-0 rounded-full bg-amber-300" />}
           </Chip>
     }>

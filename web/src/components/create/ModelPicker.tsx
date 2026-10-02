@@ -50,7 +50,7 @@ function ModelRow({ model, providerName, selected, favorite, onPick }: {
   );
 }
 
-export function ModelPicker({ modality, current, block, row }: { modality: Modality; current?: ModelInfo; block?: boolean; row?: boolean }) {
+export function ModelPicker({ modality, current, block, row, className }: { modality: Modality; current?: ModelInfo; block?: boolean; row?: boolean; className?: string }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const { data, isLoading, error } = useModels(modality);
@@ -92,7 +92,7 @@ export function ModelPicker({ modality, current, block, row }: { modality: Modal
       ) : (
         <button
           onClick={() => setOpen(!open)}
-          className={clsx('flex h-9 min-w-0 items-center gap-2 rounded-xl border border-line bg-panel-3/60 px-3 text-sm hover:bg-white/10', block && 'h-12 w-full')}
+          className={clsx('flex h-9 min-w-0 items-center gap-2 rounded-xl border border-line bg-panel-3/60 px-3 text-sm hover:bg-white/10', block && 'h-12 w-full', className)}
         >
           <Sparkles className="size-4 shrink-0 text-accent" />
           <span className="truncate font-medium">{current?.name || 'Choose model'}</span>

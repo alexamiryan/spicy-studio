@@ -146,7 +146,7 @@ export function BatchControl({ value, onChange, row }: { value: number; onChange
   );
 }
 
-export function FolderControl({ row }: { row?: boolean }) {
+export function FolderControl({ row, className }: { row?: boolean; className?: string }) {
   const { workspaceId: ws, draft, patchDraft, toast } = useStore();
   const { data } = useFolders(ws);
   const [open, setOpen] = useState(false);
@@ -172,7 +172,7 @@ export function FolderControl({ row }: { row?: boolean }) {
     <Popover open={open} onOpenChange={o => { setOpen(o); if (!o) { setSearch(''); setNaming(null); } }} title="Save generations to folder" width="w-64" trigger={
       row
         ? <button className="flex h-12 w-full items-center gap-2 px-4 text-left text-sm active:bg-white/5" onClick={() => setOpen(!open)}><FolderIcon className="size-4 text-muted" /><span className="text-muted">Folder</span><span className="ml-auto truncate font-medium">{current?.name || 'Unsorted'}</span><ChevronDown className="size-4 text-faint" /></button>
-        : <Chip active={Boolean(current)} onClick={() => setOpen(!open)} title="Folder for new generations"><FolderIcon className="size-4" /><span className="max-w-32 truncate">{current?.name || 'No folder'}</span></Chip>
+        : <Chip active={Boolean(current)} onClick={() => setOpen(!open)} title={current ? `Folder for new generations: ${current.name}` : 'Folder for new generations'} className={className}><FolderIcon className="size-4 shrink-0" /><span className="min-w-0 truncate">{current?.name || 'No folder'}</span></Chip>
     }>
       <div className="relative mb-1">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />

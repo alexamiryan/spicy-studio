@@ -126,7 +126,8 @@ function GenerateButton({ model, className, size = 'md' }: { model?: ModelInfo; 
 
 // Settings people change most get a chip in the desktop box; the rest go under "More".
 const PRIORITY = [/aspect/, /^resolution$|size|quality/, /duration/, /^mode$|style|variant/];
-const MAX_INLINE = 4;
+// The desktop box shows this many settings as chips (one line); the rest go under More.
+const MAX_INLINE = 3;
 
 function splitFields(model: ModelInfo) {
   const rank = (key: string) => { const i = PRIORITY.findIndex(re => re.test(key)); return i < 0 ? PRIORITY.length : i; };
@@ -194,22 +195,30 @@ function DockedCreateBox() {
             Drop to add as references
           </div>
         )}
+        {/*
+          Fixed zones, so every control is always in the same place (fixed widths, long names truncate):
+          top = what (mode · preset · model), bottom = how and go (the model's settings · folder · batch · Generate).
+        */}
+        <div className="mb-2 flex items-center gap-1.5">
+          <ModalityTabs value={modality} />
+          <PresetsControl className="w-40" />
+          <ModelPicker modality={modality} current={model} className="w-64" />
+        </div>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <RefTray model={model} />
             <PromptInput model={model} onSubmit={generate} />
           </div>
         </div>
-        <div className="mt-1 flex items-end gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-            <ModalityTabs value={modality} />
-            <PresetsControl />
-            <ModelPicker modality={modality} current={model} />
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-2 xl:flex-nowrap">
+          <div className="flex min-h-9 w-full min-w-0 items-center gap-1.5 xl:w-auto xl:flex-1 [&>*]:shrink-0">
             <SettingsList model={model} />
-            <FolderControl />
-            <BatchControl value={draft.batch} onChange={batch => useStore.getState().patchDraft({ batch })} />
           </div>
-          <GenerateButton model={model} />
+          <div className="ml-auto flex items-center gap-1.5">
+            <FolderControl className="w-36" />
+            <BatchControl value={draft.batch} onChange={batch => useStore.getState().patchDraft({ batch })} />
+            <GenerateButton model={model} className="w-44" />
+          </div>
         </div>
       </div>
     </div>
