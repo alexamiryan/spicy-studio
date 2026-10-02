@@ -68,9 +68,20 @@ function useQuote(model: ModelInfo | undefined) {
     retry: false,
     queryFn: async () => {
       const body = payload(model);
-      return (await api.post<{ cost: { amount: number; unit: string } | null }>('/api/quote', { ...body, prompt: body?.prompt || 'preview' })).cost;
+      return (await api.post<{ cost: { amount: number; unit: string; via?: string; modelName?: string } | null }>('/api/quote', { ...body, prompt: body?.prompt || 'preview' })).cost;
     },
   });
+}
+
+/** Provider name for an id, from the loaded model lists (e.g. where an Auto model was routed). */
+function providerLabel(id?: string) {
+  if (!id) return '';
+  for (const key of [keys.models('image'), keys.models('video')]) {
+    const data = queryClient.getQueryData<{ providers: { id: string; name: string }[] }>(key);
+    const found = data?.providers.find(p => p.id === id);
+    if (found) return found.name;
+  }
+  return id;
 }
 
 function useGenerate(model: ModelInfo | undefined) {
@@ -81,7 +92,8 @@ function useGenerate(model: ModelInfo | undefined) {
     setBusy(true);
     try {
       const rows = await api.post<Generation[]>('/api/generations', payload(model)!);
-      toast(rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started');
+      const via = model.providerId === 'auto' ? providerLabel(rows[0]?.providerId) : '';
+      toast(`${rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started'}${via ? ` on ${via} (cheapest)` : ''}`);
       set({ createOpen: false });
       queryClient.invalidateQueries({ queryKey: keys.active(workspaceId!) });
       const prefs = { folderId: draft.folderId, [model.modality === 'image' ? 'imageModel' : 'videoModel']: model.id };
@@ -119,7 +131,11 @@ function GenerateButton({ model, className, size = 'md' }: { model?: ModelInfo; 
     <Button variant="primary" size={size} className={clsx('min-w-32', className)} onClick={generate} loading={busy} disabled={!model}>
       {!busy && <Wand2 className="size-4" />}
       Generate{batch > 1 ? ` ×${batch}` : ''}
-      {quote.data && <span className="rounded-md bg-black/15 px-1.5 py-0.5 text-xs font-semibold">{formatCost(quote.data.amount, quote.data.unit)}</span>}
+      {quote.data && (
+        <span className="min-w-0 truncate rounded-md bg-black/15 px-1.5 py-0.5 text-xs font-semibold" title={quote.data.via ? `Cheapest right now: ${quote.data.modelName} on ${quote.data.via}` : undefined}>
+          {formatCost(quote.data.amount, quote.data.unit)}{quote.data.via ? ` · ${quote.data.via}` : ''}
+        </span>
+      )}
     </Button>
   );
 }
@@ -219,7 +235,7 @@ function DockedCreateBox() {
           <div className="ml-auto flex items-center gap-1.5">
             <FolderControl className="w-36" />
             <BatchControl value={draft.batch} onChange={batch => useStore.getState().patchDraft({ batch })} />
-            <GenerateButton model={model} className="w-44" />
+            <GenerateButton model={model} className="w-52" />
           </div>
         </div>
       </div>

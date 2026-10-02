@@ -16,7 +16,9 @@ function create(userId: string): Provider[] {
     new SpicyProvider(userId),
     new HiggsfieldProvider(userId),
     new PoyoProvider(userId),
-    ...(process.env.MOCK_PROVIDER === '1' ? [new MockProvider()] : []),
+    ...(process.env.MOCK_PROVIDER === '1'
+      ? [new MockProvider(), new MockProvider('mockb', 'Mock B', 'USD', 0.008, Number(process.env.MOCK_B_BALANCE ?? 0.05))]
+      : []),
   ];
 }
 

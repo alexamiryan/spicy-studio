@@ -117,6 +117,11 @@ export interface Provider {
   name: string;
   authType: 'apiKey' | 'oauth';
   unit: string;
+  /**
+   * Dollar value of one unit of this provider's balance, used by the auto router to compare prices across
+   * providers ('USD' units are worth 1). Leave undefined when it depends on the user's plan: the user sets it.
+   */
+  unitValueUsd?: number;
   configured(): Promise<boolean>;
   listModels(modality: Modality): Promise<ModelInfo[]>;
   getModel(model: string): Promise<ModelInfo>;

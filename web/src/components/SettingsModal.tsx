@@ -7,6 +7,7 @@ import { keys, queryClient, useAuth, useMySettings, useProviders, useSessions } 
 import { errorText, useStore } from '../lib/store';
 import type { Balance, MySettings, ProviderStatus, SaveTargetForm } from '../lib/types';
 import { UsersAdmin } from './UsersAdmin';
+import { AutoRouterSettings } from './AutoRouterSettings';
 import { Button, Field, Modal, Segmented, inputClass } from './ui';
 
 function refreshProviders() {
@@ -182,6 +183,7 @@ function GeneralTab() {
         </div>
         <Toggle label="Remove metadata when saving" on={Boolean(data?.stripMetadata)} onChange={update} />
       </div>
+      <AutoRouterSettings />
     </div>
   );
 }

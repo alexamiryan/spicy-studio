@@ -163,6 +163,19 @@ Every upload in the web app goes through `actions.ts: uploadInBatches` (4 files 
 pill, per-file retry); the server's multipart cap (500 files, 200 MB per file) is only a safety limit,
 and files over it are dropped silently by the multipart parser, so never upload big selections in one request.
 
+### Auto router
+
+`services/router.ts` groups every connected provider's models into families by name (`familyName`: strips
+variant suffixes after " · ", noise words, "v3"→"3", "3.0"→"3"; special-purpose variants never route).
+A user's picked families (`user_settings.router.models`) are served as virtual models `auto:<family key>` in an
+"Auto" group first in `/api/models`. Their settings/inputs are generic (`aspect_ratio`, `resolution`,
+`duration`, `audio`; refs `images`/`start`/`end`/`videos`/`audio`). On quote/generate, `route()` translates
+the box to each candidate (`translateSettings`: closest option; `translateRefs`: by role, null if the model
+can't take the inputs or misses a required one), prices them with the normal quote path, converts credits to
+dollars (user's value → `Provider.unitValueUsd` → fallback) and picks the cheapest whose balance covers it.
+Nothing is provider-specific: a new provider is routed automatically once its models are named like others.
+`MOCK_PROVIDER=1` registers two mocks (Mock in credits, Mock B in USD with a small balance) for testing.
+
 ### Presets
 
 `presets` (`routes/presets.ts`) store a create-box state per workspace and modality: model id, prompt,

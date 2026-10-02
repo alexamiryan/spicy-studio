@@ -4,6 +4,7 @@ import { higgsfieldFor, providersFor, spicyFor } from '../providers/registry.js'
 import { ProviderError, type Modality } from '../providers/types.js';
 import { modelFor, quoteGeneration, type GenerateInput } from '../services/generations.js';
 import { getProviderRow, saveCredentials, setEnabled } from '../services/providerSettings.js';
+import { AUTO, autoModel, families, getRouterSettings, updateRouterSettings } from '../services/router.js';
 
 const origin = (request: FastifyRequest) => `${request.protocol}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 const uid = (request: FastifyRequest) => request.userId!;
@@ -21,6 +22,19 @@ async function status(userId: string, id: string) {
   }
   return { id, name: provider.name, authType: provider.authType, unit: provider.unit, configured: await provider.configured(), enabled: row.enabled, detail };
 }
+
+/** The Auto models a user picked, for one modality. */
+async function autoModels(userId: string, modality: Modality) {
+  const { models } = await getRouterSettings(userId);
+  if (!models.length) return [];
+  const all = await families(userId);
+  return models.map(key => all.get(key)).filter(f => f && f.modality === modality).map(f => autoModel(f!));
+}
+
+const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
+  id: AUTO, name: 'Auto', authType: 'apiKey', unit: 'USD', configured: true, enabled: true,
+  detail: 'Cheapest provider with enough balance', models,
+});
 
 const favorites = async (userId: string) =>
   (await q<{ model_id: string }>('select model_id from favorite_models where user_id = $1 order by created_at', [userId])).map(r => r.model_id);
@@ -104,11 +118,42 @@ export function providerRoutes(app: FastifyInstance) {
       try { return { ...s, models: await p.listModels(modality) }; }
       catch (error: any) { return { ...s, models: [], error: error.message }; }
     }));
-    return { providers: groups, favorites: await favorites(userId) };
+    // The user's Auto models (routed to the cheapest provider) come first.
+    const auto = await autoModels(userId, modality);
+    return { providers: auto.length ? [autoGroup(auto), ...groups] : groups, favorites: await favorites(userId) };
+  });
+
+  // ---------- auto router
+  app.get('/api/router', async request => {
+    const userId = uid(request);
+    const settings = await getRouterSettings(userId);
+    const all = [...(await families(userId)).values()];
+    const routable = all.filter(f => new Set(f.candidates.map(c => c.provider.id)).size > 1 || settings.models.includes(f.key));
+    return {
+      families: routable.sort((a, b) => a.modality.localeCompare(b.modality) || a.name.localeCompare(b.name)).map(f => ({
+        key: f.key, name: f.name, modality: f.modality, providers: [...new Set(f.candidates.map(c => c.provider.name))],
+      })),
+      selected: settings.models,
+      // Credit-based providers: what one credit is worth in dollars (to compare prices across providers).
+      credits: providersFor(userId).filter(p => p.unit !== 'USD').map(p => ({
+        id: p.id, name: p.name, unit: p.unit, value: settings.creditValues[p.id] ?? p.unitValueUsd ?? null, known: p.unitValueUsd !== undefined,
+      })),
+    };
+  });
+
+  app.patch('/api/router', async request => {
+    const body = (request.body || {}) as { models?: string[]; creditValues?: Record<string, number> };
+    await updateRouterSettings(uid(request), body);
+    return { ok: true };
   });
 
   app.get('/api/model', async request => {
     const { id } = request.query as { id?: string };
+    if (String(id).startsWith(`${AUTO}:`)) {
+      const model = [...await autoModels(uid(request), 'image'), ...await autoModels(uid(request), 'video')].find(m => m.id === id);
+      if (!model) throw new ProviderError('This Auto model is not available.', 404);
+      return model;
+    }
     return (await modelFor(uid(request), String(id || ''))).model;
   });
 

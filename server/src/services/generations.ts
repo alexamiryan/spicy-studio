@@ -6,6 +6,7 @@ import { absPath, ensureQuotePlaceholder, storeFromUrl } from './media.js';
 import { resolvePrompt } from './prompt.js';
 import { notifyChange } from '../events.js';
 import { ownWorkspace } from './access.js';
+import { AUTO, route } from './router.js';
 
 export const ACTIVE = ['pending', 'queued', 'running', 'saving'];
 
@@ -118,7 +119,23 @@ async function ownerOf(generationId: string): Promise<string | undefined> {
     'select w.user_id from generations g join workspaces w on w.id = g.workspace_id where g.id = $1', [generationId]))?.user_id;
 }
 
+const isAuto = (modelId: string) => modelId.startsWith(`${AUTO}:`);
+
+/** An Auto model's request, resolved to the cheapest affordable provider's model, settings and references. */
+async function routed(userId: string, input: GenerateInput) {
+  const { chosen } = await route(userId, input.modelId, input.settings || {}, input.refSlots || {},
+    (modelId, settings, refSlots) => quoteConcrete(userId, { ...input, modelId, settings, refSlots }));
+  return { chosen, input: { ...input, modelId: chosen.model.id, settings: chosen.settings, refSlots: chosen.refSlots } };
+}
+
 export async function quoteGeneration(userId: string, input: GenerateInput) {
+  if (!isAuto(input.modelId)) return quoteConcrete(userId, input);
+  await ownWorkspace(userId, input.workspaceId);
+  const { chosen } = await routed(userId, input);
+  return chosen.cost && { ...chosen.cost, via: chosen.provider.name, modelName: chosen.model.name };
+}
+
+async function quoteConcrete(userId: string, input: GenerateInput) {
   await ownWorkspace(userId, input.workspaceId);
   const { provider, model } = await modelFor(userId, input.modelId);
   const built = await buildRequest(input.workspaceId, model, input, true);
@@ -150,8 +167,10 @@ export async function quoteGeneration(userId: string, input: GenerateInput) {
   return cost ? { amount: cost.amount * batch, unit: cost.unit } : null;
 }
 
-export async function createGenerations(userId: string, input: GenerateInput) {
-  await ownWorkspace(userId, input.workspaceId);
+export async function createGenerations(userId: string, request: GenerateInput) {
+  await ownWorkspace(userId, request.workspaceId);
+  // Auto models: generate with the cheapest provider whose balance covers it.
+  const input = isAuto(request.modelId) ? (await routed(userId, request)).input : request;
   const { provider, model } = await modelFor(userId, input.modelId);
   if (!model.available) bad('This model is currently unavailable.');
   const built = await buildRequest(input.workspaceId, model, input);

@@ -18,6 +18,9 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 
 ## Features
 
+- **Auto models**: pick models that several of your providers offer (Settings → General). They appear at the
+  top of the model picker; each generation goes to the provider where it's cheapest right now and your balance
+  covers it (credit prices are compared in dollars; set what a Higgsfield credit is worth on your plan).
 - **Workspaces** keep generations, folders, references and elements separate, e.g. one per influencer.
 - **Create box** built from each model's own schema: model picker with search and favorites,
   image/video/audio inputs (start/end frames, reference images, videos, audio), settings, folder and

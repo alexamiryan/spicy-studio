@@ -140,6 +140,8 @@ export class PoyoProvider implements Provider {
   name = 'PoYo';
   authType = 'apiKey' as const;
   unit = 'credits';
+  /** PoYo's price tiers list 5 credits = $0.025. */
+  unitValueUsd = 0.005;
 
   constructor(private userId: string, private fetchFn: typeof fetch = fetch) {}
 

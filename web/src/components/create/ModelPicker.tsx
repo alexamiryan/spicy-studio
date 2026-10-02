@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { AlertTriangle, Check, ChevronDown, Search, Sparkles, Star } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Search, Sparkles, Star, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api } from '../../lib/api';
 import { selectModel } from '../../lib/actions';
@@ -121,6 +121,13 @@ export function ModelPicker({ modality, current, block, row, className }: { moda
       </div>
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
       {error && <div className="p-3 text-sm text-danger">{errorText(error)}</div>}
+      {/* Auto models (cheapest provider) come first, then favorites, then each provider. */}
+      {groups.filter(g => g.id === 'auto' && g.models.length).map(g => (
+        <section key={g.id} className="mb-2">
+          <div className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-accent"><Zap className="size-3 fill-current" /> Auto · cheapest provider</div>
+          {g.models.map(m => <ModelRow key={m.id} model={m} providerName="Auto" selected={current?.id === m.id} favorite={favSet.has(m.id)} onPick={() => pick(m)} />)}
+        </section>
+      ))}
       {favorites.length > 0 && (
         <section className="mb-2">
           <div className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-faint"><Star className="size-3 fill-current" /> Favorites</div>
@@ -129,7 +136,7 @@ export function ModelPicker({ modality, current, block, row, className }: { moda
           ))}
         </section>
       )}
-      {groups.map(g => (
+      {groups.filter(g => g.id !== 'auto').map(g => (
         <section key={g.id} className="mb-2">
           <div className="px-2.5 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-faint">{g.name}</div>
           {!g.configured || !g.enabled ? (

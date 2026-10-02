@@ -50,19 +50,25 @@ const MODELS: ModelInfo[] = [
 
 const tasks = new Map<string, { at: number; req: CreateRequest }>();
 
+/**
+ * A free fake provider for development (MOCK_PROVIDER=1). A second instance ("Mock B", priced in dollars
+ * with a small balance) offers the same models, so the auto router can be exercised end to end.
+ */
 export class MockProvider implements Provider {
-  id = 'mock';
-  name = 'Mock';
   authType = 'apiKey' as const;
-  unit = 'credits';
+  private models: ModelInfo[];
+  constructor(public id = 'mock', public name = 'Mock', public unit = 'credits', private price = 1,
+    private funds = 999, public unitValueUsd: number | undefined = 0.01) {
+    this.models = MODELS.map(m => ({ ...m, id: `${id}:${m.model}`, providerId: id }));
+  }
   async configured() { return true; }
-  async listModels(modality: Modality) { return MODELS.filter(m => m.modality === modality); }
+  async listModels(modality: Modality) { return this.models.filter(m => m.modality === modality); }
   async getModel(model: string) {
-    const found = MODELS.find(m => m.model === model);
+    const found = this.models.find(m => m.model === model);
     if (!found) throw new ProviderError('Unknown mock model.', 404);
     return found;
   }
-  async quote(req: CreateRequest) { return { amount: req.settings.quality === 'high' ? 2 : 1, unit: this.unit }; }
+  async quote(req: CreateRequest) { return { amount: (req.settings.quality === 'high' ? 2 : 1) * this.price, unit: this.unit }; }
   async upload(_file: string, _mime: string, filename: string) { return { uri: `mock://${filename}` }; }
   async create(req: CreateRequest) {
     const taskId = randomUUID();
@@ -83,5 +89,5 @@ export class MockProvider implements Provider {
     await sharp({ create: { width: w * 128, height: h * 128, channels: 3, background: `hsl(${hue}, 70%, 55%)` } }).png().toFile(file);
     return { state: 'succeeded', cost: 1, assets: [{ url: `file://${file}`, mime: 'image/png' }] };
   }
-  async balance() { return { amount: 999, unit: this.unit, detail: 'mock' }; }
+  async balance() { return { amount: this.funds, unit: this.unit, detail: 'mock' }; }
 }
