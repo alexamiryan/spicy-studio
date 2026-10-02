@@ -1,6 +1,7 @@
 import { clsx } from 'clsx';
-import { CheckCircle2, KeyRound, Link2, Monitor, ShieldCheck, Unplug } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle2, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import { formatBalance } from '../lib/models';
 import { keys, queryClient, useAuth, useMySettings, useProviders, useSessions } from '../lib/queries';
@@ -8,7 +9,7 @@ import { errorText, useStore } from '../lib/store';
 import type { Balance, MySettings, ProviderStatus, SaveTargetForm } from '../lib/types';
 import { UsersAdmin } from './UsersAdmin';
 import { AutoRouterSettings } from './AutoRouterSettings';
-import { Button, Field, Modal, Segmented, inputClass } from './ui';
+import { Button, Field, IconButton, Segmented, inputClass } from './ui';
 
 function refreshProviders() {
   queryClient.invalidateQueries({ queryKey: keys.providers });
@@ -183,7 +184,6 @@ function GeneralTab() {
         </div>
         <Toggle label="Remove metadata when saving" on={Boolean(data?.stripMetadata)} onChange={update} />
       </div>
-      <AutoRouterSettings />
     </div>
   );
 }
@@ -263,30 +263,85 @@ function SaveLocationTab() {
   );
 }
 
+type SettingsTab = 'general' | 'auto' | 'save' | 'providers' | 'account' | 'users';
+
+const SECTIONS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string; admin?: boolean }[] = [
+  { id: 'general', label: 'General', icon: <SlidersHorizontal className="size-4" />, description: 'How saving behaves.' },
+  { id: 'auto', label: 'Auto models', icon: <Zap className="size-4" />, description: 'Models that go to the cheapest provider with enough balance.' },
+  { id: 'save', label: 'Save location', icon: <HardDrive className="size-4" />, description: 'Where Save puts your files: a NAS share or a server folder.' },
+  { id: 'providers', label: 'Providers', icon: <Plug className="size-4" />, description: 'Connect the services that generate your images and videos.' },
+  { id: 'account', label: 'Account', icon: <UserRound className="size-4" />, description: 'Your password and signed-in devices.' },
+  { id: 'users', label: 'Users', icon: <Users className="size-4" />, description: 'Create, edit and remove accounts.', admin: true },
+];
+
+/** Settings: a full-screen page with sections (sidebar on desktop, a strip of tabs on phones). */
 export function SettingsModal() {
   const { modal, set } = useStore();
   const open = modal?.type === 'settings';
-  const tab = open ? modal.tab || 'general' : 'general';
   const { data: providers = [] } = useProviders();
   const { data: auth } = useAuth();
-  return (
-    <Modal open={open} onClose={() => set({ modal: null })} wide title={
-      <div className="no-scrollbar -my-1 overflow-x-auto py-1">
-        <Segmented value={tab} onChange={t => set({ modal: { type: 'settings', tab: t } })} options={[
-          { value: 'general', label: 'General' }, { value: 'save', label: 'Save location' }, { value: 'providers', label: 'Providers' },
-          { value: 'account', label: 'Account' }, ...(auth?.role === 'admin' ? [{ value: 'users' as const, label: 'Users' }] : []),
-        ]} />
+  const sections = SECTIONS.filter(x => !x.admin || auth?.role === 'admin');
+  const tab = (open && modal.tab && sections.some(x => x.id === modal.tab) ? modal.tab : 'general') as SettingsTab;
+  const section = sections.find(x => x.id === tab)!;
+  const close = () => set({ modal: null });
+  const go = (id: SettingsTab) => set({ modal: { type: 'settings', tab: id } });
+
+  useEffect(() => {
+    if (!open) return;
+    // Esc closes the page, unless a dialog on top of it handles it first.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[role=dialog]')) close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  if (!open) return null;
+
+  return createPortal(
+    <div className="pt-safe fade-in fixed inset-0 z-50 flex flex-col bg-bg">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-2 md:px-4">
+        <IconButton label="Back" onClick={close}><ChevronLeft className="size-5" /></IconButton>
+        <h1 className="text-base font-semibold">Settings</h1>
+        <div className="ml-auto hidden md:block"><IconButton label="Close settings" onClick={close}><X className="size-5" /></IconButton></div>
+      </header>
+      {/* Phones: the sections as a scrollable strip */}
+      <nav className="no-scrollbar flex shrink-0 gap-1.5 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
+        {sections.map(x => (
+          <button key={x.id} onClick={() => go(x.id)}
+            className={clsx('flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm', x.id === tab ? 'bg-white/10 font-medium text-fg' : 'text-muted')}>
+            {x.icon}{x.label}
+          </button>
+        ))}
+      </nav>
+      <div className="flex min-h-0 flex-1">
+        {/* Desktop: sidebar */}
+        <nav className="hidden w-60 shrink-0 space-y-0.5 border-r border-line p-3 md:block">
+          {sections.map(x => (
+            <button key={x.id} onClick={() => go(x.id)}
+              className={clsx('flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-sm transition',
+                x.id === tab ? 'bg-white/10 font-medium text-fg' : 'text-muted hover:bg-white/5 hover:text-fg')}>
+              {x.icon}{x.label}
+            </button>
+          ))}
+        </nav>
+        <main className="scrollbar-thin min-w-0 flex-1 overflow-y-auto">
+          <div className="pb-safe mx-auto max-w-3xl px-1 pb-10 pt-4 md:px-6 md:pt-8">
+            <div className="px-4 pb-1">
+              <h2 className="text-xl font-semibold">{section.label}</h2>
+              <p className="mt-1 text-sm text-muted">{section.description}</p>
+            </div>
+            {tab === 'general' && <GeneralTab />}
+            {tab === 'auto' && <div className="p-4"><AutoRouterSettings /></div>}
+            {tab === 'save' && <SaveLocationTab />}
+            {tab === 'users' && <UsersAdmin />}
+            {tab === 'providers' && (
+              <div className="space-y-3 p-4">
+                {providers.map(p => <ProviderCard key={p.id} p={p} />)}
+              </div>
+            )}
+            {tab === 'account' && <AccountTab />}
+          </div>
+        </main>
       </div>
-    }>
-      {tab === 'general' && <GeneralTab />}
-      {tab === 'save' && <SaveLocationTab />}
-      {tab === 'users' && auth?.role === 'admin' && <UsersAdmin />}
-      {tab === 'providers' && (
-        <div className="space-y-3 p-4">
-          {providers.map(p => <ProviderCard key={p.id} p={p} />)}
-        </div>
-      )}
-      {tab === 'account' && <AccountTab />}
-    </Modal>
+    </div>,
+    document.body,
   );
 }

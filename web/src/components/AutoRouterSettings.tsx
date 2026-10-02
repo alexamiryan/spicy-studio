@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Check, Search, Zap } from 'lucide-react';
+import { Check, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { queryClient } from '../lib/queries';
@@ -41,18 +41,12 @@ export function AutoRouterSettings() {
 
   return (
     <div className="space-y-3 rounded-2xl border border-line p-4">
-      <div className="flex items-start gap-3">
-        <Zap className="mt-0.5 size-5 shrink-0 text-accent" />
-        <div className="min-w-0">
-          <div className="font-semibold">Auto models</div>
-          <p className="mt-1 text-sm text-muted">
+      <p className="text-sm text-muted">
             Pick models you use often. They appear at the top of the model picker as <span className="text-fg">Auto</span>,
             and each generation goes to the provider where it's cheapest right now, if your balance there covers it.
             Models only one provider has work too, and use more providers as soon as you connect them.
             Uncensored versions are always preferred when one can take your inputs.
           </p>
-        </div>
-      </div>
       {isLoading ? <div className="flex justify-center py-6"><Spinner /></div> : !data?.families.length ? (
         <p className="text-sm text-faint">Connect a provider (SpicyAPI, Higgsfield, PoYo…) in Settings → Providers to use Auto models.</p>
       ) : (
