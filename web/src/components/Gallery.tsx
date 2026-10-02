@@ -139,7 +139,6 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
         className={clsx(
           'relative block aspect-[3/4] w-full overflow-hidden rounded-lg bg-panel-2 outline-none transition select-none [-webkit-touch-callout:none] md:rounded-xl',
           isSelected ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
-            : !asset.seen ? 'ring-[1.5px] ring-accent/70 focus-visible:ring-2' // not opened yet
             : 'focus-visible:ring-2 focus-visible:ring-accent/60',
         )}
       >
@@ -152,6 +151,10 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
           <video src={asset.url} poster={asset.thumbUrl || undefined} autoPlay muted loop playsInline className="absolute inset-0 size-full object-cover" />
         )}
         <VideoBadge asset={asset} />
+        {/* Not opened yet: drawn inside the card (cards clip anything outside them), in a colour the green UI doesn't use. */}
+        {!asset.seen && !isSelected && (
+          <span className="pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-fuchsia-400 shadow-[inset_0_0_14px_rgba(232,121,249,0.35)]" />
+        )}
         {asset.exported && <span title="Saved to workspace folder" className="absolute right-1 top-1 rounded-md bg-black/60 p-0.5 backdrop-blur md:right-1.5 md:top-1.5"><Save className="size-3 text-accent" /></span>}
       </button>
       <button
