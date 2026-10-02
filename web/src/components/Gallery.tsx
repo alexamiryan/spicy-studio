@@ -156,7 +156,10 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
       </button>
       <button
         aria-label={isSelected ? 'Deselect' : 'Select'}
-        onClick={() => { if (!selecting) set({ selecting: true }); toggleSelect(asset.id); }}
+        onClick={e => {
+          if (!selecting) set({ selecting: true });
+          if (e.shiftKey) { e.preventDefault(); selectRangeTo(asset.id); } else toggleSelect(asset.id);
+        }}
         className={clsx(
           'absolute left-1 top-1 flex size-6 items-center justify-center rounded-md border backdrop-blur transition md:left-1.5 md:top-1.5',
           isSelected ? 'border-accent bg-accent text-accent-fg' : 'border-white/40 bg-black/40 text-transparent',
@@ -378,14 +381,15 @@ export function FolderSidebar() {
 
 // ---------------------------------------------------------------- selection
 
-function SelectionBar() {
+/** Selection actions: inline in the grid's header row on desktop (nothing shifts), a bottom bar on phones. */
+function SelectionBar({ inline }: { inline?: boolean }) {
   const { selected, selecting, clearSelection, set, workspaceId, view, folder, kind, toast, fillRange } = useStore();
   const mobile = useIsMobile();
   const [allIds, setAllIds] = useState<string[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
   const [moving, setMoving] = useState(false);
   useEffect(() => setAllIds(null), [view, folder, kind, workspaceId]);
-  if (!selecting) return null;
+  if (!selecting || (inline ? mobile : !mobile)) return null;
 
   // Results stay in the timeline; their photos are filed in a reference library.
   async function toLibrary(to: 'model' | 'environments') {
@@ -414,23 +418,28 @@ function SelectionBar() {
     finally { setLoadingAll(false); }
   }
 
-  return (
-    <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur-xl md:sticky md:top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)] md:z-20 md:mb-3 md:rounded-2xl md:border md:bg-panel-2 md:pb-0 md:shadow-xl md:backdrop-blur-none">
-      <div className="no-scrollbar flex h-16 items-center gap-2 overflow-x-auto px-3 md:overflow-visible">
-        <IconButton label="Cancel selection" onClick={clearSelection}><X className="size-5" /></IconButton>
-        <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
-        <Button variant="ghost" loading={loadingAll} onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
-        {rangeGap(selected) && (
-          <Button variant="ghost" onClick={fillRange} title="Select everything between the first and last selected (desktop: Shift+click)">Range</Button>
-        )}
-        <span className="hidden flex-1 text-xs text-faint lg:block">Shift+click selects a range</span>
-        <MoveMenu side={mobile ? 'top' : 'bottom'} align={mobile ? 'left' : 'right'} disabled={!selected.length} busy={moving} targets={[
+  const controls = (
+    <>
+      <IconButton label="Cancel selection" onClick={clearSelection}><X className="size-5" /></IconButton>
+      <span className="shrink-0 text-sm font-medium tabular-nums">{selected.length} selected</span>
+      <Button variant="ghost" loading={loadingAll} onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
+      {rangeGap(selected) && (
+        <Button variant="ghost" onClick={fillRange} title="Select everything between the first and last selected (desktop: Shift+click)">Range</Button>
+      )}
+      {inline && <span className="hidden text-xs text-faint xl:inline">Shift+click selects a range</span>}
+      <span className={inline ? 'w-2' : 'flex-1'} />
+      <MoveMenu side={inline ? 'bottom' : 'top'} align={inline ? 'left' : 'left'} disabled={!selected.length} busy={moving} targets={[
           { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: selected } }) },
           { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: 'Photos only; results stay in your timeline', onSelect: () => toLibrary('model') },
           { key: 'environments', label: 'Environments', icon: <MapPin className="size-4" />, hint: 'Photos only; shared by all your workspaces', onSelect: () => toLibrary('environments') },
-        ]} />
-        <Button variant="danger" disabled={!selected.length} onClick={() => deleteAssets(workspaceId!, selected)}><Trash2 className="size-4" /><span className="hidden sm:inline">Delete</span></Button>
-      </div>
+      ]} />
+      <Button variant="danger" disabled={!selected.length} onClick={() => deleteAssets(workspaceId!, selected)}><Trash2 className="size-4" /><span className="hidden sm:inline">Delete</span></Button>
+    </>
+  );
+  if (inline) return <div className="flex min-w-0 items-center gap-1.5">{controls}</div>;
+  return (
+    <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur-xl">
+      <div className="no-scrollbar flex h-16 items-center gap-2 overflow-x-auto px-3">{controls}</div>
     </div>
   );
 }
@@ -452,9 +461,10 @@ export function Gallery() {
 
   return (
     <div className="min-w-0 flex-1 px-2 pb-48 pt-3 md:px-5">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* One line on desktop, so starting a selection never pushes the grid down. */}
+      <div className="mb-3 flex min-h-10 flex-wrap items-center gap-2 md:flex-nowrap">
         <Segmented
-          className="lg:hidden"
+          className={clsx('lg:hidden', selecting && 'md:hidden')}
           value={view}
           onChange={v => set({ view: v, folder: null })}
           options={[{ value: 'timeline', label: 'Timeline' }, { value: 'folders', label: 'Folders' }]}
@@ -468,13 +478,14 @@ export function Gallery() {
         ) : (
           <h1 className="hidden text-base font-semibold lg:block">{view === 'timeline' ? 'Timeline' : 'Folders'}</h1>
         )}
+        <SelectionBar inline />
         <div className="ml-auto flex items-center gap-1">
           {(view === 'timeline' || openFolder) && (
             <>
               <Segmented value={kind} onChange={v => set({ kind: v })} options={[
                 { value: 'all', label: 'All' },
-                { value: 'image', label: <span className="flex items-center gap-1.5" title="Photos"><Images className="size-4" /><span className="hidden sm:inline">Photos</span></span> },
-                { value: 'video', label: <span className="flex items-center gap-1.5" title="Videos"><Film className="size-4" /><span className="hidden sm:inline">Videos</span></span> },
+                { value: 'image', label: <span className="flex items-center gap-1.5" title="Photos"><Images className="size-4" /><span className="hidden sm:inline md:hidden lg:inline">Photos</span></span> },
+                { value: 'video', label: <span className="flex items-center gap-1.5" title="Videos"><Film className="size-4" /><span className="hidden sm:inline md:hidden lg:inline">Videos</span></span> },
               ]} />
               <IconButton label="Select" active={selecting} onClick={() => (selecting ? useStore.getState().clearSelection() : set({ selecting: true }))}>
                 <CheckSquare className="size-5" />
