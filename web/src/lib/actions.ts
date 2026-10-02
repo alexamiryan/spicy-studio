@@ -54,7 +54,7 @@ export async function recreate(generationId: string, source?: Asset) {
       settings: { ...draft.settings, [g.modelId]: model ? defaultSettings(model, g.settings) : g.settings },
       prompt: g.prompt,
       refSlots: model ? remapRefs(refSlots, model) : refSlots,
-      folderId: g.folderId,
+      folderId: folderFor(g.folderId),
       batch: g.batchSize || 1,
     });
     set({ viewer: null, createOpen: true });
@@ -64,6 +64,16 @@ export async function recreate(generationId: string, source?: Asset) {
   } catch (error) {
     toast(errorText(error), 'error');
   }
+}
+
+/**
+ * The folder new generations should go to when the create box is (re)loaded: the folder open in the
+ * sidebar wins (Unsorted = no folder); otherwise the loaded result's or preset's own folder.
+ */
+function folderFor(loaded: string | null): string | null {
+  const { view, folder } = useStore.getState();
+  if (view === 'folders' && folder) return folder === 'unsorted' ? null : folder;
+  return loaded;
 }
 
 /** Add refs to the create box: to the given field, or the current model's main reference field. */
@@ -312,7 +322,7 @@ export async function animateAsset(asset: Asset) {
       prompt: detail?.prompt ?? draft.prompt,
       refSlots: slots,
       batch: detail?.batchSize || draft.batch,
-      folderId: detail ? detail.folderId : draft.folderId,
+      folderId: folderFor(detail ? detail.folderId : draft.folderId),
     });
     set({ viewer: null, createOpen: true });
     toast(detail ? `Ready to animate with ${model.name} (last video settings)` : `Ready to animate with ${model.name}`);
@@ -471,7 +481,7 @@ export async function loadPreset(preset: Preset) {
     settings: { ...draft.settings, [preset.modelId]: model ? defaultSettings(model, preset.settings) : preset.settings },
     prompt: preset.prompt,
     refSlots: model ? remapRefs(refSlots, model) : refSlots,
-    folderId: preset.folderId,
+    folderId: folderFor(preset.folderId),
     batch: preset.batch || 1,
   });
   markActive(preset.modality, preset.id);

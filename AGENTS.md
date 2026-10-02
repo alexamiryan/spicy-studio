@@ -159,6 +159,9 @@ workspace + modality. UI: `components/create/Presets.tsx`. The store keeps the a
 with a snapshot of the box (`presetSnapshot`); a different box shows it as edited and offers Update. Presets
 are never saved automatically. Recreate, Animate and switching workspace clear the active preset.
 
+Folder rule: while a folder is open in the sidebar, it is the create box's folder. Opening it selects it,
+and Recreate, Animate and loading a preset keep it (`actions.ts: folderFor`; Unsorted = no folder).
+
 ### @mentions and elements
 
 `services/prompt.ts: resolvePrompt()` turns `@image2` into `image 2`. For normal models `@Mia` attaches
