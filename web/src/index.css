@@ -17,6 +17,8 @@
 }
 
 :root { color-scheme: dark; }
+/* Native dropdown lists: selects styled with a transparent background otherwise open as light text on white (Windows). */
+select option, select optgroup { background-color: var(--color-panel-2); color: var(--color-fg); }
 
 html, body, #root { height: 100%; }
 
