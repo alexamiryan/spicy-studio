@@ -8,7 +8,7 @@ import { formatCost } from '../../lib/models';
 import { keys, queryClient, useModels, useWorkspaces } from '../../lib/queries';
 import { useFileDrop, usePasteFiles } from '../../lib/fileInput';
 import { errorText, useStore } from '../../lib/store';
-import type { Generation, Modality, ModelInfo } from '../../lib/types';
+import type { Generation, Modality, ModelField, ModelInfo } from '../../lib/types';
 import { Button, IconButton, Modal, Segmented, useIsMobile } from '../ui';
 import { ModelPicker } from './ModelPicker';
 import { PresetsControl } from './Presets';
@@ -137,7 +137,9 @@ function splitFields(model: ModelInfo) {
   const inline = new Set([...pinned, ...candidates.slice(0, Math.max(MAX_INLINE - pinned.length, 0))].map(f => f.key));
   let more = model.fields.filter(f => !inline.has(f.key));
   if (more.length === 1 && more[0].type !== 'text') { inline.add(more[0].key); more = []; }
-  return { inline: model.fields.filter(f => inline.has(f.key)), more };
+  // Video: duration is the setting you change most, so it comes first.
+  const first = (f: ModelField) => (pinned.includes(f) ? 0 : 1);
+  return { inline: model.fields.filter(f => inline.has(f.key)).sort((a, b) => first(a) - first(b)), more };
 }
 
 function SettingsList({ model, row }: { model?: ModelInfo; row?: boolean }) {
