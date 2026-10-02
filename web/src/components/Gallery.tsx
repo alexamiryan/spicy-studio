@@ -151,9 +151,10 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
           <video src={asset.url} poster={asset.thumbUrl || undefined} autoPlay muted loop playsInline className="absolute inset-0 size-full object-cover" />
         )}
         <VideoBadge asset={asset} />
-        {/* Not opened yet: drawn inside the card (cards clip anything outside them), in a colour the green UI doesn't use. */}
+        {/* Not opened yet: a small glowing dot (like a "new" badge), in a colour the green UI doesn't use. */}
         {!asset.seen && !isSelected && (
-          <span className="pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-fuchsia-400 shadow-[inset_0_0_14px_rgba(232,121,249,0.35)]" />
+          <span aria-hidden className={clsx('pointer-events-none absolute top-1.5 size-2.5 rounded-full bg-fuchsia-400 ring-2 ring-black/40 shadow-[0_0_10px_2px_rgba(232,121,249,0.75)] md:top-2 md:size-3',
+            asset.exported ? 'right-7 md:right-8' : 'right-1.5 md:right-2')} />
         )}
         {asset.exported && <span title="Saved to workspace folder" className="absolute right-1 top-1 rounded-md bg-black/60 p-0.5 backdrop-blur md:right-1.5 md:top-1.5"><Save className="size-3 text-accent" /></span>}
       </button>
