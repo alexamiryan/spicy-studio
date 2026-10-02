@@ -47,6 +47,7 @@ export async function recreate(generationId: string, source?: Asset) {
     }
     await loadModels(g.modality).catch(() => null);
     const model = cachedModel(g.modelId, g.modality);
+    markActive(g.modality, undefined);
     patchDraft({
       modality: g.modality,
       models: { ...draft.models, [g.modality]: g.modelId },
@@ -303,6 +304,7 @@ export async function animateAsset(asset: Asset) {
     const field = usedRefs && !usedFrame ? main : frame;
     if (field) slots[field.key] = field.max === 1 ? [ref] : [ref, ...(slots[field.key] || []).filter(r => r.id !== ref.id)].slice(0, field.max);
 
+    markActive('video', undefined);
     patchDraft({
       modality: 'video',
       models: { ...draft.models, video: model.id },
@@ -391,7 +393,7 @@ export async function environmentRefs(workspaceId: string, ids: string[]): Promi
 // ---------------------------------------------------------------- presets
 
 /** The create box's current state for one modality, as stored in a preset. */
-function presetState(modality: Modality) {
+export function presetState(modality: Modality) {
   const { draft } = useStore.getState();
   const modelId = draft.models[modality];
   if (!modelId) throw new Error('Pick a model first.');
@@ -403,8 +405,28 @@ function presetState(modality: Modality) {
 }
 
 const refreshPresets = (workspaceId: string) => queryClient.invalidateQueries({ queryKey: keys.presets(workspaceId) });
-const markActive = (modality: Modality, id: string | undefined) =>
-  useStore.getState().set({ activePreset: { ...useStore.getState().activePreset, [modality]: id } });
+/** JSON with sorted keys, so the same state always compares equal. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().filter(k => (value as any)[k] !== undefined).map(k => `${JSON.stringify(k)}:${stableJson((value as any)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/** The create box state as compared with a loaded preset (empty reference inputs don't count). */
+export function presetSnapshot(modality: Modality) {
+  try {
+    const state = presetState(modality);
+    return stableJson({ ...state, refSlots: Object.fromEntries(Object.entries(state.refSlots).filter(([, ids]) => ids.length)) });
+  } catch { return ''; }
+}
+
+/** Remember which preset the box holds now (and its exact state), or forget it. */
+function markActive(modality: Modality, id: string | undefined) {
+  const { activePreset, set } = useStore.getState();
+  set({ activePreset: { ...activePreset, [modality]: id ? { id, snapshot: presetSnapshot(modality) } : undefined } });
+}
 
 export async function savePreset(workspaceId: string, modality: Modality, name: string) {
   const preset = await api.post<Preset>('/api/presets', { workspaceId, modality, name, ...presetState(modality) });
@@ -428,7 +450,7 @@ export async function renamePreset(preset: Preset, name: string) {
 
 export async function deletePreset(preset: Preset) {
   await api.del(`/api/presets/${preset.id}`);
-  if (useStore.getState().activePreset[preset.modality] === preset.id) markActive(preset.modality, undefined);
+  if (useStore.getState().activePreset[preset.modality]?.id === preset.id) markActive(preset.modality, undefined);
   refreshPresets(preset.workspaceId);
 }
 

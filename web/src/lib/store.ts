@@ -39,8 +39,11 @@ interface State {
   createOpen: boolean; // mobile create sheet
   /** The result last used for Recreate; the reference picker offers it first. */
   recreatedFrom: Asset | null;
-  /** The preset last loaded or saved per modality (marked in the presets list). */
-  activePreset: Partial<Record<Modality, string>>;
+  /**
+   * The preset last loaded or saved per modality, with a snapshot of the create box at that moment:
+   * a different box means the preset was edited (offered for update, never saved automatically).
+   */
+  activePreset: Partial<Record<Modality, { id: string; snapshot: string }>>;
   /** A multi-file upload in progress (shown as a progress pill). */
   upload: { done: number; total: number; label: string } | null;
   toasts: Toast[];
@@ -88,7 +91,7 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   setWorkspace: id => {
     if (get().workspaceId === id) return;
-    set({ workspaceId: id, draft: loadDraft(id), folder: null, selected: [], selecting: false, viewer: null });
+    set({ workspaceId: id, draft: loadDraft(id), folder: null, selected: [], selecting: false, viewer: null, activePreset: {} });
   },
   patchDraft: patch => set(s => ({ draft: { ...s.draft, ...patch } })),
   setDraft: draft => set({ draft }),

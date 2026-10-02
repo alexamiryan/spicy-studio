@@ -155,7 +155,9 @@ and files over it are dropped silently by the multipart parser, so never upload 
 `presets` (`routes/presets.ts`) store a create-box state per workspace and modality: model id, prompt,
 settings, ref ids per field, folder, batch. Saving validates refs/folder against the workspace; loading
 (`actions.ts: loadPreset`) works like Recreate and skips references deleted since. Names are unique per
-workspace + modality. UI: `components/create/Presets.tsx`.
+workspace + modality. UI: `components/create/Presets.tsx`. The store keeps the active preset per modality
+with a snapshot of the box (`presetSnapshot`); a different box shows it as edited and offers Update. Presets
+are never saved automatically. Recreate, Animate and switching workspace clear the active preset.
 
 ### @mentions and elements
 

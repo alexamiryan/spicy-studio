@@ -1,7 +1,7 @@
 import { clsx } from 'clsx';
-import { Bookmark, Check, ChevronDown, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bookmark, Check, ChevronDown, Pencil, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { cachedModel, deletePreset, loadPreset, renamePreset, savePreset, updatePreset } from '../../lib/actions';
+import { cachedModel, deletePreset, loadPreset, presetSnapshot, renamePreset, savePreset, updatePreset } from '../../lib/actions';
 import { usePresets } from '../../lib/queries';
 import { errorText, useStore } from '../../lib/store';
 import type { Preset } from '../../lib/types';
@@ -66,12 +66,25 @@ function PresetRow({ preset, active, onLoad }: { preset: Preset; active: boolean
 export function PresetsControl({ row }: { row?: boolean }) {
   const { workspaceId: ws, toast } = useStore();
   const modality = useStore(s => s.draft.modality);
-  const activeId = useStore(s => s.activePreset[s.draft.modality]);
+  const activeEntry = useStore(s => s.activePreset[s.draft.modality]);
+  const activeId = activeEntry?.id;
+  useStore(s => s.draft); // re-render on every change to the box, to notice edits
   const { data: presets, isLoading } = usePresets(ws, modality);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const active = presets?.find(p => p.id === activeId);
+  // Changed since the preset was loaded or saved? Offered for update; never saved automatically.
+  const edited = Boolean(active && activeEntry && presetSnapshot(modality) !== activeEntry.snapshot);
+
+  async function updateActive() {
+    if (!active) return;
+    setUpdating(true);
+    try { await updatePreset(active); toast(`Updated "${active.name}"`, 'ok'); setOpen(false); }
+    catch (error) { toast(errorText(error), 'error'); }
+    finally { setUpdating(false); }
+  }
   const kind = modality === 'video' ? 'video' : 'photo';
 
   async function save(e: React.FormEvent) {
@@ -88,12 +101,24 @@ export function PresetsControl({ row }: { row?: boolean }) {
       row
         ? <button className="flex h-12 w-full items-center gap-2 rounded-2xl border border-line bg-panel-2 px-4 text-left text-sm active:bg-white/5" onClick={() => setOpen(!open)}>
             <Bookmark className="size-4 text-accent" /><span className="text-muted">Preset</span>
-            <span className="ml-auto truncate font-medium">{active?.name || (presets?.length ? `${presets.length} saved` : 'None yet')}</span><ChevronDown className="size-4 text-faint" />
+            <span className="ml-auto truncate font-medium">{active?.name || (presets?.length ? `${presets.length} saved` : 'None yet')}</span>
+            {edited && <span className="shrink-0 rounded-md bg-amber-400/15 px-1.5 text-xs text-amber-300">edited</span>}
+            <ChevronDown className="size-4 text-faint" />
           </button>
         : <Chip active={Boolean(active)} onClick={() => setOpen(!open)} title={`Saved ${kind} presets for this workspace`}>
             <Bookmark className="size-4" /><span className="max-w-36 truncate">{active?.name || 'Presets'}</span>
+            {edited && <span title="Changed since it was loaded" className="size-1.5 shrink-0 rounded-full bg-amber-300" />}
           </Chip>
     }>
+      {edited && active && (
+        <div className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-2.5">
+          <p className="text-sm">You changed <span className="font-medium">{active.name}</span> since loading it.</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Button size="sm" variant="primary" loading={updating} onClick={updateActive}><Save className="size-4" />Update “{active.name}”</Button>
+            <Button size="sm" variant="ghost" onClick={() => document.getElementById('preset-new-name')?.focus()}>Save as new…</Button>
+          </div>
+        </div>
+      )}
       <div className="max-h-[50vh] space-y-0.5 overflow-y-auto">
         {isLoading ? <div className="flex justify-center py-6"><Spinner /></div>
           : presets?.length ? presets.map(p => (
@@ -106,7 +131,7 @@ export function PresetsControl({ row }: { row?: boolean }) {
           )}
       </div>
       <form onSubmit={save} className="mt-2 flex items-center gap-1.5 border-t border-line pt-2">
-        <input className={clsx(inputClass, 'h-10')} value={name} onChange={e => setName(e.target.value)} maxLength={60}
+        <input id="preset-new-name" className={clsx(inputClass, 'h-10')} value={name} onChange={e => setName(e.target.value)} maxLength={60}
           placeholder={`Save current ${kind} setup as…`} />
         <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!name.trim()}><Plus className="size-4" />Save</Button>
       </form>
