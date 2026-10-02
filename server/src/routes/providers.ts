@@ -128,9 +128,11 @@ export function providerRoutes(app: FastifyInstance) {
     const userId = uid(request);
     const settings = await getRouterSettings(userId);
     const all = [...(await families(userId)).values()];
-    const routable = all.filter(f => new Set(f.candidates.map(c => c.provider.id)).size > 1 || settings.models.includes(f.key));
+    // Every routable model, also those only one provider offers (more providers can join later);
+    // ones offered by several providers first.
+    const providerCount = (f: (typeof all)[number]) => new Set(f.candidates.map(c => c.provider.id)).size;
     return {
-      families: routable.sort((a, b) => a.modality.localeCompare(b.modality) || a.name.localeCompare(b.name)).map(f => ({
+      families: all.sort((a, b) => a.modality.localeCompare(b.modality) || providerCount(b) - providerCount(a) || a.name.localeCompare(b.name)).map(f => ({
         key: f.key, name: f.name, modality: f.modality, providers: [...new Set(f.candidates.map(c => c.provider.name))],
         // The concrete models an Auto model can resolve to (uncensored ones first).
         models: f.candidates

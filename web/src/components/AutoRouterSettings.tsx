@@ -46,20 +46,22 @@ export function AutoRouterSettings() {
         <div className="min-w-0">
           <div className="font-semibold">Auto models</div>
           <p className="mt-1 text-sm text-muted">
-            Pick models that several of your providers offer. They appear at the top of the model picker as <span className="text-fg">Auto</span>,
+            Pick models you use often. They appear at the top of the model picker as <span className="text-fg">Auto</span>,
             and each generation goes to the provider where it's cheapest right now, if your balance there covers it.
+            Models only one provider has work too, and use more providers as soon as you connect them.
             Uncensored versions are always preferred when one can take your inputs.
           </p>
         </div>
       </div>
       {isLoading ? <div className="flex justify-center py-6"><Spinner /></div> : !data?.families.length ? (
-        <p className="text-sm text-faint">Connect at least two providers that offer the same models (e.g. SpicyAPI, Higgsfield, PoYo) to use Auto models.</p>
+        <p className="text-sm text-faint">Connect a provider (SpicyAPI, Higgsfield, PoYo…) in Settings → Providers to use Auto models.</p>
       ) : (
         <>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
             <input className={clsx(inputClass, 'pl-9')} placeholder="Find a model…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <div className="scrollbar-thin -mx-1 max-h-[28rem] space-y-3 overflow-y-auto px-1">
           {(['image', 'video'] as const).map(modality => {
             const list = shown.filter(f => f.modality === modality);
             if (!list.length) return null;
@@ -99,6 +101,8 @@ export function AutoRouterSettings() {
               </section>
             );
           })}
+          {!shown.length && <p className="px-1 py-2 text-sm text-faint">No models match.</p>}
+          </div>
           {data.credits.length > 0 && (
             <div className="space-y-2 border-t border-line pt-3">
               <div className="text-sm font-medium">What a credit is worth</div>
