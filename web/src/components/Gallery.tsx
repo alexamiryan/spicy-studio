@@ -459,6 +459,15 @@ export function Gallery() {
     if (view === 'folders' && folder && folder !== 'unsorted' && folders.data && !folderName) set({ folder: null });
   }, [view, folder, folders.data, folderName, set]);
 
+  // Opening a folder makes it the create box's folder, so new generations land where you're looking.
+  const folderExists = folder === 'unsorted' || Boolean(folderName);
+  useEffect(() => {
+    if (view !== 'folders' || !folder || !folderExists) return;
+    const id = folder === 'unsorted' ? null : folder;
+    const { draft, patchDraft } = useStore.getState();
+    if (draft.folderId !== id) patchDraft({ folderId: id });
+  }, [view, folder, folderExists]);
+
   return (
     <div className="min-w-0 flex-1 px-2 pb-48 pt-3 md:px-5">
       {/* One line on desktop, so starting a selection never pushes the grid down. */}
