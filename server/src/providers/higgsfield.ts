@@ -18,6 +18,12 @@ import {
 const ID = 'higgsfield';
 
 /**
+ * Higgsfield's catalog says nothing about content policy, so models known to be uncensored are listed
+ * here. Users can mark others themselves (Settings → Auto models).
+ */
+const UNCENSORED = new Set(['seedream_v4_5']);
+
+/**
  * Models that take Higgsfield Elements (reusable characters/props stored in the user's Higgsfield account),
  * per the MCP's show_reference_elements documentation. Kling 3.0 only uses them together with a start image.
  */
@@ -241,6 +247,7 @@ export function normalizeHiggsfieldModel(item: any): ModelInfo {
     vendor: item.provider_name || undefined,
     modality,
     description: item.description || undefined,
+    mature: UNCENSORED.has(item.id) ? true : undefined,
     promptField: 'prompt',
     fields,
     refFields,

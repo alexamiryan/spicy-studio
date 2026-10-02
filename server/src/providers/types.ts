@@ -49,6 +49,11 @@ export interface ModelInfo {
   promptField?: string;
   fields: ModelField[];
   refFields: RefField[];
+  /**
+   * The provider says this model allows mature/uncensored content (true), restricts it (false), or doesn't
+   * say (undefined). Auto models never mix the two; users can mark models the provider says nothing about.
+   */
+  mature?: boolean;
   /** The provider takes @elements itself (named subjects), instead of their images being attached as references. */
   nativeElements?: NativeElements;
   price?: string;

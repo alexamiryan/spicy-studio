@@ -18,9 +18,14 @@ const SPECIAL = /motion control|layer decomposition|extend|upscal|remove|backgro
 // Words that don't change which model it is ("Wan 3.0 Spicy" is Wan 3.0, uncensored).
 const NOISE = /\b(video|image|api|model|google|bytedance|openai|alibaba|kuaishou|minimax hailuo|spicy|uncensored|nsfw)\b/g;
 
-/** Uncensored versions: SpicyAPI's "… Spicy" models, products tagged "Uncensored" (PoYo). Exported for tests. */
-export function isUncensored(model: Pick<ModelInfo, 'name' | 'model' | 'description'>): boolean {
-  return /\bspicy\b|uncensored|nsfw/i.test(`${model.name} ${model.model} ${model.description || ''}`);
+/**
+ * Whether a model version is uncensored: the user's own mark wins, then what the provider reports
+ * (SpicyAPI `mature`, PoYo's "Uncensored" tag), then the name. Exported for tests.
+ */
+export function isUncensored(model: Pick<ModelInfo, 'id' | 'name' | 'model' | 'mature'>, marks: Record<string, boolean> = {}): boolean {
+  if (typeof marks[model.id] === 'boolean') return marks[model.id];
+  if (typeof model.mature === 'boolean') return model.mature;
+  return /\bspicy\b|uncensored|nsfw/i.test(`${model.name} ${model.model}`);
 }
 
 /** Family name of a model (provider-independent), or null when it isn't routable. Exported for tests. */
@@ -34,14 +39,19 @@ export function familyName(model: Pick<ModelInfo, 'name'>): string | null {
   return base || null;
 }
 
-export const familyKey = (modality: Modality, name: string) => `${modality}.${name.replace(/[^a-z0-9.]+/g, '-')}`;
+export const familyKey = (modality: Modality, name: string, uncensored = false) =>
+  `${modality}.${name.replace(/[^a-z0-9.]+/g, '-')}${uncensored ? '.uncensored' : ''}`;
 
 interface Candidate { provider: Provider; model: ModelInfo }
-export interface Family { key: string; name: string; modality: Modality; candidates: Candidate[] }
+export interface Family { key: string; name: string; modality: Modality; uncensored: boolean; candidates: Candidate[] }
 
-/** All routable families for a user's connected providers (any number of providers). */
+/**
+ * All routable families for a user's connected providers (any number of providers). Uncensored and
+ * regular versions of a model are separate families, so an Auto model never mixes the two.
+ */
 export async function families(userId: string): Promise<Map<string, Family>> {
   const out = new Map<string, Family>();
+  const { marks } = await getRouterSettings(userId);
   for (const provider of providersFor(userId)) {
     if (provider.id === 'mock' && process.env.MOCK_PROVIDER !== '1') continue;
     const row = await getProviderRow(userId, provider.id);
@@ -53,9 +63,11 @@ export async function families(userId: string): Promise<Map<string, Family>> {
         if (!model.available) continue;
         const name = familyName(model);
         if (!name) continue;
-        const key = familyKey(modality, name);
-        const family = out.get(key) || { key, name: displayName(model), modality, candidates: [] };
-        if (displayName(model).length < family.name.length) family.name = displayName(model);
+        const uncensored = isUncensored(model, marks);
+        const key = familyKey(modality, name, uncensored);
+        const label = (n: string) => (uncensored ? `${n} · Uncensored` : n);
+        const family = out.get(key) || { key, name: label(displayName(model)), modality, uncensored, candidates: [] };
+        if (label(displayName(model)).length < family.name.length) family.name = label(displayName(model));
         family.candidates.push({ provider, model });
         out.set(key, family);
       }
@@ -65,7 +77,8 @@ export async function families(userId: string): Promise<Map<string, Family>> {
 }
 
 const displayName = (model: ModelInfo) => {
-  const base = model.name.split(' · ')[0].trim();
+  // "Seedance 2.5 Spicy" → "Seedance 2.5": the family's " · Uncensored" suffix says it instead.
+  const base = model.name.split(' · ')[0].replace(/\s+(spicy|uncensored|nsfw)\b/gi, '').trim();
   const short = base.replace(/[\s-]+(Video|Image)$/i, '').trim();
   return short.length > 2 ? short : base; // "Wan 2.6 Video" → "Wan 2.6", but "Z Image" stays
 };
@@ -138,7 +151,7 @@ export function autoModel(family: Family): ModelInfo {
   return {
     id: `${AUTO}:${family.key}`, providerId: AUTO, model: family.key, name: family.name, vendor: providers.join(' / '),
     modality: family.modality, promptField: 'prompt', fields, refFields, available: true,
-    description: `Cheapest of ${providers.join(', ')} with enough balance${family.candidates.some(c => isUncensored(c.model)) ? ' · uncensored versions first' : ''}`,
+    description: `${family.uncensored ? 'Uncensored versions only. ' : ''}Cheapest of ${providers.join(', ')} with enough balance`,
   };
 }
 
@@ -190,7 +203,12 @@ export function translateRefs(model: ModelInfo, slots: Record<string, string[]>)
 
 // ---------------------------------------------------------------- pricing and choosing
 
-export interface RouterSettings { models: string[]; creditValues: Record<string, number> }
+export interface RouterSettings {
+  models: string[];
+  creditValues: Record<string, number>;
+  /** The user's own uncensored marks per model id (for providers that don't say). */
+  marks: Record<string, boolean>;
+}
 
 /** Used for providers whose credit value depends on the user's plan until the user sets it. */
 const FALLBACK_CREDIT_VALUE = 0.05;
@@ -201,15 +219,22 @@ export async function getRouterSettings(userId: string): Promise<RouterSettings>
   return {
     models: Array.isArray(r.models) ? r.models.map(String) : [],
     creditValues: { ...(r.creditValues || {}) },
+    marks: { ...(r.marks || {}) },
   };
 }
 
-export async function updateRouterSettings(userId: string, patch: Partial<RouterSettings>) {
+export async function updateRouterSettings(userId: string, patch: Partial<Omit<RouterSettings, 'marks'>> & { marks?: Record<string, boolean | null> }) {
   const current = await getRouterSettings(userId);
   const next = {
     models: patch.models ? [...new Set(patch.models.map(String))].slice(0, 50) : current.models,
     creditValues: { ...current.creditValues },
+    marks: { ...current.marks },
   };
+  // A mark of null removes it (back to what the provider reports).
+  for (const [id, value] of Object.entries(patch.marks || {})) {
+    if (!/^[\w.-]+:[\w./-]+$/.test(id)) continue;
+    if (typeof value === 'boolean') next.marks[id] = value; else delete next.marks[id];
+  }
   for (const [id, value] of Object.entries(patch.creditValues || {})) {
     const n = Number(value);
     if (Number.isFinite(n) && n >= 0 && n < 100) next.creditValues[id] = n;
@@ -256,7 +281,7 @@ export async function route(
   const key = autoModelId.slice(AUTO.length + 1);
   const family = (await families(userId)).get(key);
   if (!family) throw new ProviderError('None of your connected providers offers this model right now.', 400);
-  const values = (await getRouterSettings(userId)).creditValues;
+  const { creditValues: values, marks } = await getRouterSettings(userId);
   const compatible = family.candidates
     .map(c => ({ ...c, refs: translateRefs(c.model, refSlots) }))
     .filter((c): c is Candidate & { refs: Record<string, string[]> } => c.refs !== null);
@@ -267,7 +292,7 @@ export async function route(
       price(c.model.id, s, c.refs).catch(() => null),
       balanceOf(userId, c.provider),
     ]);
-    return { provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance, uncensored: isUncensored(c.model) };
+    return { provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance, uncensored: isUncensored(c.model, marks) };
   }));
   const affordable = options.filter(o => !o.cost || o.balance === null || o.balance >= o.cost.amount);
   if (!affordable.length) {

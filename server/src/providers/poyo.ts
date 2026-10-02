@@ -96,6 +96,8 @@ function toModels(): ModelInfo[] {
         fields: normalized.fields, promptField: normalized.promptField ?? 'prompt',
         refFields: forVariant(product, model, normalized),
         price: Number.isFinite(cheapest) ? `from ${cheapest} cr` : undefined,
+        // PoYo tags products that allow uncensored output; it doesn't mark the others either way.
+        mature: product.tasks.some(t => /uncensored/i.test(t)) ? true : undefined,
         available: true,
       });
     }

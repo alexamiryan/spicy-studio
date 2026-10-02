@@ -21,7 +21,9 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 - **Auto models**: pick the models you use (Settings → Auto models). They appear at the
   top of the model picker; each generation goes to the provider where it's cheapest right now and your balance
   covers it (credit prices are compared in dollars; set what a Higgsfield credit is worth on your plan).
-  Uncensored versions (e.g. SpicyAPI's "Spicy" models) are always preferred when they can take your inputs.
+  Uncensored and regular versions are separate Auto models (e.g. "Seedance 2.5" and "Seedance 2.5 · Uncensored"),
+  so a generation never switches between them. Providers report which is which where they can; for Higgsfield,
+  which doesn't, mark versions yourself in Settings → Auto models.
 - **Workspaces** keep generations, folders, references and elements separate, e.g. one per influencer.
 - **Create box** built from each model's own schema: model picker with search and favorites,
   image/video/audio inputs (start/end frames, reference images, videos, audio), settings, folder and

@@ -82,7 +82,7 @@ describe('translating the create box', () => {
 
 describe('the Auto model', () => {
   it('offers the shared settings and inputs', () => {
-    const family: Family = { key: 'image.seedream-4.5', name: 'Seedream 4.5', modality: 'image', candidates: [
+    const family: Family = { key: 'image.seedream-4.5', name: 'Seedream 4.5', modality: 'image', uncensored: false, candidates: [
       { provider: { name: 'Higgsfield' } as any, model: higgs },
       { provider: { name: 'PoYo' } as any, model: poyoT2i },
       { provider: { name: 'PoYo' } as any, model: poyoEdit },
@@ -102,15 +102,19 @@ describe('the Auto model', () => {
 });
 
 describe('uncensored versions', () => {
-  it('belong to the same family as the regular model', () => {
+  it('share the base name but get their own family key', () => {
     expect(familyName({ name: 'Wan 3.0 Spicy · Image to Video' })).toBe(familyName({ name: 'Wan 3.0' }));
-    expect(familyName({ name: 'Seedance 2.0 Mini Spicy · Image to Video' })).toBe(familyName({ name: 'Seedance 2.0 Mini' }));
+    expect(familyKey('video', 'seedance 2.5', true)).toBe('video.seedance-2.5.uncensored');
+    expect(familyKey('video', 'seedance 2.5')).not.toBe(familyKey('video', 'seedance 2.5', true));
   });
 
-  it('are recognised by name or tag', () => {
-    expect(isUncensored({ name: 'Wan 3.0 Spicy · Image to Video', model: 'alibaba/wan-3.0-spicy/image-to-video' })).toBe(true);
-    expect(isUncensored({ name: 'Seedream 4.5 · Edit', model: 'seedream-4.5-edit', description: 'Text to Image · Image to Image · Uncensored' })).toBe(true);
-    expect(isUncensored({ name: 'Wan 3.0', model: 'wan3_0' })).toBe(false);
+  it('follow the provider flag, then the user mark, then the name', () => {
+    expect(isUncensored({ id: 's:a', name: 'Seedance 2.5 Spicy', model: 'x', mature: true })).toBe(true);
+    expect(isUncensored({ id: 's:b', name: 'Seedance 2.5', model: 'y', mature: false })).toBe(false);
+    expect(isUncensored({ id: 'h:c', name: 'Wan 3.0', model: 'wan3_0' })).toBe(false);
+    expect(isUncensored({ id: 'h:c', name: 'Wan 3.0', model: 'wan3_0' }, { 'h:c': true })).toBe(true);
+    expect(isUncensored({ id: 's:a', name: 'X', model: 'x', mature: true }, { 's:a': false })).toBe(false);
+    expect(isUncensored({ id: 'p:d', name: 'Wan 3.0 Spicy', model: 'wan' })).toBe(true);
   });
 
   it('win over cheaper censored ones; then price decides', () => {

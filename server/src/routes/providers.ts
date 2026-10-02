@@ -134,10 +134,14 @@ export function providerRoutes(app: FastifyInstance) {
     return {
       families: all.sort((a, b) => a.modality.localeCompare(b.modality) || providerCount(b) - providerCount(a) || a.name.localeCompare(b.name)).map(f => ({
         key: f.key, name: f.name, modality: f.modality, providers: [...new Set(f.candidates.map(c => c.provider.name))],
-        // The concrete models an Auto model can resolve to (uncensored ones first).
+        uncensored: f.uncensored,
+        // The concrete models an Auto model can resolve to, with where their uncensored flag comes from.
         models: f.candidates
-          .map(c => ({ provider: c.provider.name, name: c.model.name, uncensored: isUncensored(c.model) }))
-          .sort((a, b) => Number(b.uncensored) - Number(a.uncensored) || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name)),
+          .map(c => ({
+            id: c.model.id, provider: c.provider.name, name: c.model.name, uncensored: isUncensored(c.model, settings.marks),
+            source: typeof settings.marks[c.model.id] === 'boolean' ? 'you' : typeof c.model.mature === 'boolean' ? 'provider' : 'unknown',
+          }))
+          .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name)),
       })),
       selected: settings.models,
       // Credit-based providers: what one credit is worth in dollars (to compare prices across providers).
@@ -148,7 +152,7 @@ export function providerRoutes(app: FastifyInstance) {
   });
 
   app.patch('/api/router', async request => {
-    const body = (request.body || {}) as { models?: string[]; creditValues?: Record<string, number> };
+    const body = (request.body || {}) as { models?: string[]; creditValues?: Record<string, number>; marks?: Record<string, boolean | null> };
     await updateRouterSettings(uid(request), body);
     return { ok: true };
   });

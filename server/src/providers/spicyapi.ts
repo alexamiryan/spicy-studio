@@ -165,6 +165,7 @@ function toModel(raw: any, fallbackModality?: Modality): ModelInfo {
     description: raw.description,
     ...normalized,
     price: formatPrice(raw.pricing),
+    mature: typeof raw.mature === 'boolean' ? raw.mature : undefined,
     available: raw.enabled !== false && raw.available !== false,
   };
 }

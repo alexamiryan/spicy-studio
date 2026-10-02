@@ -8,7 +8,10 @@ import { errorText, useStore } from '../lib/store';
 import { Spinner, inputClass } from './ui';
 
 interface RouterInfo {
-  families: { key: string; name: string; modality: 'image' | 'video'; providers: string[]; models: { provider: string; name: string; uncensored: boolean }[] }[];
+  families: {
+    key: string; name: string; modality: 'image' | 'video'; uncensored: boolean; providers: string[];
+    models: { id: string; provider: string; name: string; uncensored: boolean; source: 'provider' | 'you' | 'unknown' }[];
+  }[];
   selected: string[];
   credits: { id: string; name: string; unit: string; value: number | null; known: boolean }[];
 }
@@ -26,7 +29,7 @@ export function AutoRouterSettings() {
   const term = search.trim().toLowerCase();
   const shown = useMemo(() => (data?.families || []).filter(f => !term || f.name.toLowerCase().includes(term)), [data, term]);
 
-  async function save(patch: { models?: string[]; creditValues?: Record<string, number> }) {
+  async function save(patch: { models?: string[]; creditValues?: Record<string, number>; marks?: Record<string, boolean | null> }) {
     try {
       await api.patch('/api/router', patch);
       queryClient.invalidateQueries({ queryKey: KEY });
@@ -45,7 +48,8 @@ export function AutoRouterSettings() {
             Pick models you use often. They appear at the top of the model picker as <span className="text-fg">Auto</span>,
             and each generation goes to the provider where it's cheapest right now, if your balance there covers it.
             Models only one provider has work too, and use more providers as soon as you connect them.
-            Uncensored versions are always preferred when one can take your inputs.
+            Uncensored and regular versions are separate Auto models, so you always get the kind you picked.
+            The flag comes from the provider; where it doesn't say (Higgsfield), mark versions yourself.
           </p>
       {isLoading ? <div className="flex justify-center py-6"><Spinner /></div> : !data?.families.length ? (
         <p className="text-sm text-faint">Connect a provider (SpicyAPI, Higgsfield, PoYo…) in Settings → Providers to use Auto models.</p>
@@ -72,7 +76,10 @@ export function AutoRouterSettings() {
                             {on && <Check className="size-3.5" />}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">{f.name}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-sm font-medium">{f.name.replace(/ · Uncensored$/, '')}</span>
+                              {f.uncensored && <span className="shrink-0 rounded bg-fuchsia-400/15 px-1.5 text-[10px] font-medium text-fuchsia-300">uncensored</span>}
+                            </span>
                             <span className="block truncate text-xs text-faint">{f.providers.join(' · ')} · {f.models.length} version{f.models.length === 1 ? '' : 's'}</span>
                           </span>
                         </button>
@@ -80,10 +87,19 @@ export function AutoRouterSettings() {
                           // What this Auto model resolves to: every provider version it can choose from.
                           <ul className="space-y-1 border-t border-accent/20 px-3 py-2 text-xs">
                             {f.models.map(m => (
-                              <li key={`${m.provider}:${m.name}`} className="flex items-center gap-2">
+                              <li key={m.id} className="flex min-h-8 items-center gap-2">
                                 <span className="w-20 shrink-0 truncate text-faint">{m.provider}</span>
-                                <span className="min-w-0 truncate">{m.name}</span>
-                                {m.uncensored && <span className="shrink-0 rounded bg-fuchsia-400/15 px-1.5 text-[10px] font-medium text-fuchsia-300">uncensored · preferred</span>}
+                                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                                {m.source === 'provider' ? (
+                                  <span className="shrink-0 text-[10px] text-faint" title="Reported by the provider">{m.uncensored ? 'uncensored' : 'regular'} · by provider</span>
+                                ) : (
+                                  // The provider doesn't say: the user decides, and the version moves to the matching Auto model.
+                                  <button className="shrink-0 rounded px-1.5 py-1 text-[10px] text-muted hover:bg-white/10 hover:text-fg"
+                                    title={m.source === 'you' ? 'Marked by you · click to change' : "The provider doesn't say · click to mark"}
+                                    onClick={() => save({ marks: { [m.id]: !m.uncensored } })}>
+                                    {m.uncensored ? 'uncensored' : 'regular'}{m.source === 'you' ? ' · by you' : ''} → mark {m.uncensored ? 'regular' : 'uncensored'}
+                                  </button>
+                                )}
                               </li>
                             ))}
                           </ul>
