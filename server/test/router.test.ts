@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoModel, familyKey, familyName, refRoles, translateRefs, translateSettings, usd, type Family } from '../src/services/router.js';
+import { autoModel, familyKey, familyName, isUncensored, rankOptions, refRoles, translateRefs, translateSettings, usd, type Family } from '../src/services/router.js';
 import type { ModelInfo } from '../src/providers/types.js';
 
 const model = (over: Partial<ModelInfo>): ModelInfo => ({
@@ -98,5 +98,33 @@ describe('the Auto model', () => {
     expect(usd({ amount: 0.03, unit: 'USD' }, { id: 'spicyapi' }, {})).toBe(0.03);
     expect(usd({ amount: 5, unit: 'credits' }, { id: 'poyo', unitValueUsd: 0.005 }, {})).toBeCloseTo(0.025);
     expect(usd({ amount: 10, unit: 'credits' }, { id: 'higgsfield' }, { higgsfield: 0.04 })).toBeCloseTo(0.4);
+  });
+});
+
+describe('uncensored versions', () => {
+  it('belong to the same family as the regular model', () => {
+    expect(familyName({ name: 'Wan 3.0 Spicy · Image to Video' })).toBe(familyName({ name: 'Wan 3.0' }));
+    expect(familyName({ name: 'Seedance 2.0 Mini Spicy · Image to Video' })).toBe(familyName({ name: 'Seedance 2.0 Mini' }));
+  });
+
+  it('are recognised by name or tag', () => {
+    expect(isUncensored({ name: 'Wan 3.0 Spicy · Image to Video', model: 'alibaba/wan-3.0-spicy/image-to-video' })).toBe(true);
+    expect(isUncensored({ name: 'Seedream 4.5 · Edit', model: 'seedream-4.5-edit', description: 'Text to Image · Image to Image · Uncensored' })).toBe(true);
+    expect(isUncensored({ name: 'Wan 3.0', model: 'wan3_0' })).toBe(false);
+  });
+
+  it('win over cheaper censored ones; then price decides', () => {
+    const options = [
+      { id: 'cheap', uncensored: false, usd: 0.01 },
+      { id: 'spicy-dear', uncensored: true, usd: 0.05 },
+      { id: 'spicy-cheap', uncensored: true, usd: 0.03 },
+      { id: 'spicy-unpriced', uncensored: true, usd: null },
+    ];
+    expect(rankOptions(options).map(o => o.id)).toEqual(['spicy-cheap', 'spicy-dear', 'spicy-unpriced', 'cheap']);
+  });
+
+  it('turns safety checkers off', () => {
+    const m = model({ fields: [{ key: 'enable_safety_checker', label: 'Safety', type: 'boolean', default: true }] });
+    expect(translateSettings(m, {})).toEqual({ enable_safety_checker: false });
   });
 });

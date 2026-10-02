@@ -68,7 +68,7 @@ function useQuote(model: ModelInfo | undefined) {
     retry: false,
     queryFn: async () => {
       const body = payload(model);
-      return (await api.post<{ cost: { amount: number; unit: string; via?: string; modelName?: string } | null }>('/api/quote', { ...body, prompt: body?.prompt || 'preview' })).cost;
+      return (await api.post<{ cost: { amount: number; unit: string; via?: string; modelName?: string; uncensored?: boolean } | null }>('/api/quote', { ...body, prompt: body?.prompt || 'preview' })).cost;
     },
   });
 }
@@ -93,7 +93,7 @@ function useGenerate(model: ModelInfo | undefined) {
     try {
       const rows = await api.post<Generation[]>('/api/generations', payload(model)!);
       const via = model.providerId === 'auto' ? providerLabel(rows[0]?.providerId) : '';
-      toast(`${rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started'}${via ? ` on ${via} (cheapest)` : ''}`);
+      toast(`${rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started'}${via ? ` on ${via}` : ''}`);
       set({ createOpen: false });
       queryClient.invalidateQueries({ queryKey: keys.active(workspaceId!) });
       const prefs = { folderId: draft.folderId, [model.modality === 'image' ? 'imageModel' : 'videoModel']: model.id };
@@ -132,7 +132,7 @@ function GenerateButton({ model, className, size = 'md' }: { model?: ModelInfo; 
       {!busy && <Wand2 className="size-4" />}
       Generate{batch > 1 ? ` ×${batch}` : ''}
       {quote.data && (
-        <span className="min-w-0 truncate rounded-md bg-black/15 px-1.5 py-0.5 text-xs font-semibold" title={quote.data.via ? `Cheapest right now: ${quote.data.modelName} on ${quote.data.via}` : undefined}>
+        <span className="min-w-0 truncate rounded-md bg-black/15 px-1.5 py-0.5 text-xs font-semibold" title={quote.data.via ? `${quote.data.uncensored ? 'Uncensored' : 'Cheapest'} right now: ${quote.data.modelName} on ${quote.data.via}` : undefined}>
           {formatCost(quote.data.amount, quote.data.unit)}{quote.data.via ? ` · ${quote.data.via}` : ''}
         </span>
       )}

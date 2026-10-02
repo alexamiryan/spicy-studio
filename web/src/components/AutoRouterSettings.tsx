@@ -8,7 +8,7 @@ import { errorText, useStore } from '../lib/store';
 import { Spinner, inputClass } from './ui';
 
 interface RouterInfo {
-  families: { key: string; name: string; modality: 'image' | 'video'; providers: string[] }[];
+  families: { key: string; name: string; modality: 'image' | 'video'; providers: string[]; models: { provider: string; name: string; uncensored: boolean }[] }[];
   selected: string[];
   credits: { id: string; name: string; unit: string; value: number | null; known: boolean }[];
 }
@@ -48,6 +48,7 @@ export function AutoRouterSettings() {
           <p className="mt-1 text-sm text-muted">
             Pick models that several of your providers offer. They appear at the top of the model picker as <span className="text-fg">Auto</span>,
             and each generation goes to the provider where it's cheapest right now, if your balance there covers it.
+            Uncensored versions are always preferred when one can take your inputs.
           </p>
         </div>
       </div>
@@ -65,21 +66,33 @@ export function AutoRouterSettings() {
             return (
               <section key={modality}>
                 <div className="px-1 pb-1 text-xs font-medium uppercase tracking-wide text-faint">{modality === 'image' ? 'Photo' : 'Video'}</div>
-                <div className="grid gap-1 sm:grid-cols-2">
+                <div className="grid items-start gap-1 sm:grid-cols-2">
                   {list.map(f => {
                     const on = data.selected.includes(f.key);
                     return (
-                      <button key={f.key} onClick={() => toggle(f.key)}
-                        className={clsx('flex min-h-12 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition',
-                          on ? 'border-accent/40 bg-accent/10' : 'border-line hover:bg-white/5')}>
-                        <span className={clsx('flex size-5 shrink-0 items-center justify-center rounded-md border', on ? 'border-accent bg-accent text-accent-fg' : 'border-white/30')}>
-                          {on && <Check className="size-3.5" />}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">{f.name}</span>
-                          <span className="block truncate text-xs text-faint">{f.providers.join(' · ')}</span>
-                        </span>
-                      </button>
+                      <div key={f.key} className={clsx('rounded-xl border transition', on ? 'border-accent/40 bg-accent/10 sm:col-span-2' : 'border-line hover:bg-white/5')}>
+                        <button onClick={() => toggle(f.key)} className="flex min-h-12 w-full items-center gap-2.5 px-3 py-2 text-left">
+                          <span className={clsx('flex size-5 shrink-0 items-center justify-center rounded-md border', on ? 'border-accent bg-accent text-accent-fg' : 'border-white/30')}>
+                            {on && <Check className="size-3.5" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium">{f.name}</span>
+                            <span className="block truncate text-xs text-faint">{f.providers.join(' · ')} · {f.models.length} version{f.models.length === 1 ? '' : 's'}</span>
+                          </span>
+                        </button>
+                        {on && (
+                          // What this Auto model resolves to: every provider version it can choose from.
+                          <ul className="space-y-1 border-t border-accent/20 px-3 py-2 text-xs">
+                            {f.models.map(m => (
+                              <li key={`${m.provider}:${m.name}`} className="flex items-center gap-2">
+                                <span className="w-20 shrink-0 truncate text-faint">{m.provider}</span>
+                                <span className="min-w-0 truncate">{m.name}</span>
+                                {m.uncensored && <span className="shrink-0 rounded bg-fuchsia-400/15 px-1.5 text-[10px] font-medium text-fuchsia-300">uncensored · preferred</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

@@ -153,6 +153,8 @@ export interface Generation {
 }
 
 export interface GenerationDetail extends Generation {
+  /** Auto-routed: what actually ran (modelId/settings/refSlots above are what was picked: the Auto model). */
+  routed?: { modelId: string; modelName: string; settings: Record<string, unknown>; refSlots: Record<string, string[]> };
   resolvedPrompt?: string;
   refs: Ref[];
   assets: Asset[];

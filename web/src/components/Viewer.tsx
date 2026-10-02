@@ -58,7 +58,7 @@ export function Info({ generationId }: { generationId: string }) {
       )}
       {zoomed && <Preview item={zoomed} onClose={() => setZoomed(null)} />}
       <section className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <div><div className="text-xs text-faint">Model</div><div className="truncate">{g.modelName}</div></div>
+        <div><div className="text-xs text-faint">Model</div><div className="truncate" title={g.routed ? 'Picked by Auto: the cheapest provider at the time' : undefined}>{g.routed ? `Auto → ${g.routed.modelName}` : g.modelName}</div></div>
         <div><div className="text-xs text-faint">Provider</div><div className="capitalize">{({ spicyapi: 'SpicyAPI', poyo: 'PoYo', higgsfield: 'Higgsfield' } as Record<string, string>)[g.providerId] || g.providerId}</div></div>
         {settings.map(([k, v]) => (
           <div key={k}><div className="truncate text-xs text-faint">{k.replace(/_/g, ' ')}</div><div className="truncate">{String(v)}</div></div>

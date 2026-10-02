@@ -15,7 +15,13 @@ export const AUTO = 'auto';
 
 // Variants that do something other than plain generation from prompt + references are never routed.
 const SPECIAL = /motion control|layer decomposition|extend|upscal|remove|background|lip ?sync|avatar|animate|outpaint|swap|dubbing|voice|reframe|edit video|video to video|keyframes|first last|character|talking|foley|analy[sz]e|deflicker|topaz|depth|clipify|genjutsu|preset|marketing|multiplier|draw to/i;
-const NOISE = /\b(video|image|api|model|google|bytedance|openai|alibaba|kuaishou|minimax hailuo)\b/g;
+// Words that don't change which model it is ("Wan 3.0 Spicy" is Wan 3.0, uncensored).
+const NOISE = /\b(video|image|api|model|google|bytedance|openai|alibaba|kuaishou|minimax hailuo|spicy|uncensored|nsfw)\b/g;
+
+/** Uncensored versions: SpicyAPI's "… Spicy" models, products tagged "Uncensored" (PoYo). Exported for tests. */
+export function isUncensored(model: Pick<ModelInfo, 'name' | 'model' | 'description'>): boolean {
+  return /\bspicy\b|uncensored|nsfw/i.test(`${model.name} ${model.model} ${model.description || ''}`);
+}
 
 /** Family name of a model (provider-independent), or null when it isn't routable. Exported for tests. */
 export function familyName(model: Pick<ModelInfo, 'name'>): string | null {
@@ -132,7 +138,7 @@ export function autoModel(family: Family): ModelInfo {
   return {
     id: `${AUTO}:${family.key}`, providerId: AUTO, model: family.key, name: family.name, vendor: providers.join(' / '),
     modality: family.modality, promptField: 'prompt', fields, refFields, available: true,
-    description: `Cheapest of ${providers.join(', ')} with enough balance`,
+    description: `Cheapest of ${providers.join(', ')} with enough balance${family.candidates.some(c => isUncensored(c.model)) ? ' · uncensored versions first' : ''}`,
   };
 }
 
@@ -160,6 +166,8 @@ export function translateSettings(model: ModelInfo, auto: Record<string, unknown
       else out[f.key] = Math.min(Math.max(want, f.min ?? want), f.max ?? want);
     } else if (isAudio(f) && auto.audio !== undefined) {
       out[f.key] = Boolean(auto.audio);
+    } else if (f.type === 'boolean' && /safety_checker|safe_mode|content_filter/i.test(f.key)) {
+      out[f.key] = false; // uncensored whenever the provider lets us choose
     }
   }
   return out;
@@ -228,7 +236,13 @@ async function balanceOf(userId: string, provider: Provider): Promise<number | n
   return amount;
 }
 
-export interface RouteOption { provider: Provider; model: ModelInfo; settings: Record<string, unknown>; refSlots: Record<string, string[]>; cost: Cost | null; usd: number | null; balance: number | null }
+/** Uncensored versions first; then the known cheapest; unpriced ones last. Exported for tests. */
+export function rankOptions<T extends { uncensored: boolean; usd: number | null }>(options: T[]): T[] {
+  return [...options].sort((a, b) =>
+    Number(b.uncensored) - Number(a.uncensored) || Number(a.usd === null) - Number(b.usd === null) || (a.usd ?? 0) - (b.usd ?? 0));
+}
+
+export interface RouteOption { provider: Provider; model: ModelInfo; settings: Record<string, unknown>; refSlots: Record<string, string[]>; cost: Cost | null; usd: number | null; balance: number | null; uncensored: boolean }
 
 /**
  * Price every provider's version of an Auto model for this create box and pick the cheapest one whose
@@ -253,13 +267,12 @@ export async function route(
       price(c.model.id, s, c.refs).catch(() => null),
       balanceOf(userId, c.provider),
     ]);
-    return { provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance };
+    return { provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance, uncensored: isUncensored(c.model) };
   }));
   const affordable = options.filter(o => !o.cost || o.balance === null || o.balance >= o.cost.amount);
   if (!affordable.length) {
     const lines = options.map(o => `${o.provider.name}: needs ${o.cost!.amount} ${o.cost!.unit}, has ${o.balance}`).join('; ');
     throw new ProviderError(`Not enough balance for ${family.name} on any provider (${lines}).`, 400);
   }
-  const priced = affordable.filter(o => o.usd !== null).sort((a, b) => a.usd! - b.usd!);
-  return { chosen: priced[0] || affordable[0], options };
+  return { chosen: rankOptions(affordable)[0], options };
 }

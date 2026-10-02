@@ -4,7 +4,7 @@ import { higgsfieldFor, providersFor, spicyFor } from '../providers/registry.js'
 import { ProviderError, type Modality } from '../providers/types.js';
 import { modelFor, quoteGeneration, type GenerateInput } from '../services/generations.js';
 import { getProviderRow, saveCredentials, setEnabled } from '../services/providerSettings.js';
-import { AUTO, autoModel, families, getRouterSettings, updateRouterSettings } from '../services/router.js';
+import { AUTO, autoModel, families, getRouterSettings, isUncensored, updateRouterSettings } from '../services/router.js';
 
 const origin = (request: FastifyRequest) => `${request.protocol}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 const uid = (request: FastifyRequest) => request.userId!;
@@ -132,6 +132,10 @@ export function providerRoutes(app: FastifyInstance) {
     return {
       families: routable.sort((a, b) => a.modality.localeCompare(b.modality) || a.name.localeCompare(b.name)).map(f => ({
         key: f.key, name: f.name, modality: f.modality, providers: [...new Set(f.candidates.map(c => c.provider.name))],
+        // The concrete models an Auto model can resolve to (uncensored ones first).
+        models: f.candidates
+          .map(c => ({ provider: c.provider.name, name: c.model.name, uncensored: isUncensored(c.model) }))
+          .sort((a, b) => Number(b.uncensored) - Number(a.uncensored) || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name)),
       })),
       selected: settings.models,
       // Credit-based providers: what one credit is worth in dollars (to compare prices across providers).

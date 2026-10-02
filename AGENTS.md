@@ -173,6 +173,10 @@ A user's picked families (`user_settings.router.models`) are served as virtual m
 the box to each candidate (`translateSettings`: closest option; `translateRefs`: by role, null if the model
 can't take the inputs or misses a required one), prices them with the normal quote path, converts credits to
 dollars (user's value → `Provider.unitValueUsd` → fallback) and picks the cheapest whose balance covers it.
+Uncensored versions (`isUncensored`: SpicyAPI "… Spicy", PoYo products tagged "Uncensored") join their base
+family and always rank first (`rankOptions`); safety-checker switches are turned off when routing.
+Routed generations keep the Auto pick in `resolved_input.auto`; the detail API returns it as
+`modelId/settings/refSlots` (what Recreate/Animate restore) and what ran as `routed`.
 Nothing is provider-specific: a new provider is routed automatically once its models are named like others.
 `MOCK_PROVIDER=1` registers two mocks (Mock in credits, Mock B in USD with a small balance) for testing.
 

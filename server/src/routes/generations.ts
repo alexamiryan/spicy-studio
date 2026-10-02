@@ -48,8 +48,15 @@ export function generationRoutes(app: FastifyInstance) {
       `select a.*, g.prompt, g.model_name, g.provider_id, g.model_id from assets a join generations g on g.id = a.generation_id
         where a.generation_id = $1 order by a.idx`, [id]);
     const folder = g.folder_id ? await one('select id, name from folders where id = $1', [g.folder_id]) : null;
+    // Auto-routed: report what was picked in the create box (for Recreate/Animate) and what actually ran.
+    const auto = g.resolved_input?.auto;
+    const dto = generationDto(g);
     return {
-      ...generationDto(g),
+      ...dto,
+      ...(auto ? {
+        modelId: auto.modelId, settings: auto.settings, refSlots: auto.refSlots,
+        routed: { modelId: dto.modelId, modelName: dto.modelName, settings: dto.settings, refSlots: dto.refSlots },
+      } : {}),
       resolvedPrompt: g.resolved_input?.prompt,
       refs: refs.map(refDto),
       assets: assets.map(assetDto),

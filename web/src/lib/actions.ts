@@ -38,7 +38,10 @@ export async function recreate(generationId: string, source?: Asset) {
   const { toast, patchDraft, draft, set } = useStore.getState();
   set({ recreatedFrom: source ?? null });
   try {
-    const g = await api.get<GenerationDetail>(`/api/generations/${generationId}`);
+    let g = await api.get<GenerationDetail>(`/api/generations/${generationId}`);
+    await loadModels(g.modality).catch(() => null);
+    // Auto-routed and that Auto model is gone: restore the model that actually ran.
+    if (g.routed && !cachedModel(g.modelId, g.modality)) g = { ...g, ...g.routed };
     const byId = new Map(g.refs.map(r => [r.id, r]));
     let missing = 0;
     const refSlots: Record<string, Ref[]> = {};
@@ -304,8 +307,9 @@ export async function animateAsset(asset: Asset) {
       api.post<Ref>('/api/refs/from-asset', { assetId: asset.id }),
       api.get<{ id: string } | null>(`/api/generations/last?workspaceId=${asset.workspaceId}&modality=video`),
     ]);
-    const detail = last ? await api.get<GenerationDetail>(`/api/generations/${last.id}`) : null;
+    let detail = last ? await api.get<GenerationDetail>(`/api/generations/${last.id}`) : null;
     await loadModels('video').catch(() => null);
+    if (detail?.routed && !cachedModel(detail.modelId, 'video')) detail = { ...detail, ...detail.routed };
     const workspace = queryClient.getQueryData<Workspace[]>(keys.workspaces)?.find(w => w.id === asset.workspaceId);
     const modelId = [detail?.modelId, draft.models.video, workspace?.prefs.videoModel].find(id => id && cachedModel(id, 'video'));
     const model = modelId ? cachedModel(modelId, 'video') : undefined;

@@ -132,7 +132,7 @@ export async function quoteGeneration(userId: string, input: GenerateInput) {
   if (!isAuto(input.modelId)) return quoteConcrete(userId, input);
   await ownWorkspace(userId, input.workspaceId);
   const { chosen } = await routed(userId, input);
-  return chosen.cost && { ...chosen.cost, via: chosen.provider.name, modelName: chosen.model.name };
+  return chosen.cost && { ...chosen.cost, via: chosen.provider.name, modelName: chosen.model.name, uncensored: chosen.uncensored };
 }
 
 async function quoteConcrete(userId: string, input: GenerateInput) {
@@ -169,8 +169,11 @@ async function quoteConcrete(userId: string, input: GenerateInput) {
 
 export async function createGenerations(userId: string, request: GenerateInput) {
   await ownWorkspace(userId, request.workspaceId);
-  // Auto models: generate with the cheapest provider whose balance covers it.
+  // Auto models: generate with the cheapest provider whose balance covers it. What was picked in the
+  // create box (the Auto model, its settings and references) is kept so Recreate and Animate restore it.
   const input = isAuto(request.modelId) ? (await routed(userId, request)).input : request;
+  const auto = isAuto(request.modelId)
+    ? { modelId: request.modelId, settings: request.settings || {}, refSlots: request.refSlots || {} } : undefined;
   const { provider, model } = await modelFor(userId, input.modelId);
   if (!model.available) bad('This model is currently unavailable.');
   const built = await buildRequest(input.workspaceId, model, input);
@@ -191,7 +194,7 @@ export async function createGenerations(userId: string, request: GenerateInput) 
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13, clock_timestamp()) returning *`,
         [input.workspaceId, folderId, provider.id, model.model, model.name, model.modality, built.prompt,
           JSON.stringify(built.settings), JSON.stringify(input.refSlots || {}), group, batch,
-          JSON.stringify({ prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements }), randomUUID()]);
+          JSON.stringify({ prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto }), randomUUID()]);
       created.push(rows[0]);
     }
     return created;
