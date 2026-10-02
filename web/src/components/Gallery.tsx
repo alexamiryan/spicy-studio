@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { assetToRef, assetsToEnvironments, createFolder, deleteAssets, dismissGeneration, moveAssets, recreate, retryGeneration, saveAsset } from '../lib/actions';
+import { assetToRef, assetsToEnvironments, toggleSave, createFolder, deleteAssets, dismissGeneration, moveAssets, recreate, retryGeneration, saveAsset } from '../lib/actions';
 import { formatCost } from '../lib/models';
 import { invalidateGallery, keys, queryClient, useActive, useAssets, useFolders } from '../lib/queries';
 import { errorText, rangeGap, setGridOrder, useStore } from '../lib/store';
@@ -190,7 +190,7 @@ function CardActions({ asset }: { asset: Asset }) {
       <button className={action} aria-label="Recreate" title="Recreate" onClick={() => recreate(asset.generationId, asset)}>
         <RotateCcw />
       </button>
-      <button className={clsx(action, asset.exported && 'text-accent')} aria-label="Save" title={asset.exported ? 'Saved · save again' : 'Save to workspace folder'} onClick={() => saveAsset(asset)}>
+      <button className={clsx(action, asset.exported && 'text-accent')} aria-label="Save" title={asset.exported ? 'Saved · click to remove the saved copy' : 'Save to workspace folder'} onClick={() => toggleSave(asset)}>
         <Save />
       </button>
       <button className={clsx(action, 'hover:text-danger')} aria-label="Delete" title="Delete" onClick={() => deleteAssets(asset.workspaceId, [asset.id])}>

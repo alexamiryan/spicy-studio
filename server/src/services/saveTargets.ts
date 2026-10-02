@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { config } from '../config.js';
 import { one, q } from '../db.js';
 import { ProviderError } from '../providers/types.js';
-import { sanitizeRelativeDir, saveLocal, savedName, writeSaved } from './exports.js';
+import { resolveInside, sanitizeRelativeDir, saveLocal, savedName, writeSaved } from './exports.js';
 import { decrypt, encrypt, isEncrypted } from './secrets.js';
 
 const run = promisify(execFile);
@@ -162,10 +162,19 @@ async function smbAvailableName(target: Extract<SaveTarget, { type: 'smb' }>, di
 // ---------------------------------------------------------------- saving
 
 /** Save one result to the user's save location. Returns the stored relative path and a label to show. */
-export async function saveForUser(userId: string, opts: { file: string; mime: string; relDir: string; createdAt: Date; modelName: string; index: number }) {
+/** Where a saved copy went, recorded on the asset so it can be removed again ("unsave"). */
+export type SavedEntry =
+  | string // older records: a path relative to the export root (local) or to the SMB target's folder
+  | { type: 'local'; relative: string; display: string }
+  | { type: 'smb'; host: string; share: string; path: string; display: string };
+
+export async function saveForUser(userId: string, opts: { file: string; mime: string; relDir: string; createdAt: Date; modelName: string; index: number }): Promise<{ entry: SavedEntry; display: string }> {
   const { stripMetadata, saveTarget } = await getUserSettings(userId);
   if (!saveTarget) throw new ProviderError('Choose a save location first: Settings → Save location.', 400);
-  if (saveTarget.type === 'local') return saveLocal({ ...opts, base: saveTarget.path, stripMetadata });
+  if (saveTarget.type === 'local') {
+    const saved = await saveLocal({ ...opts, base: saveTarget.path, stripMetadata });
+    return { entry: { type: 'local', relative: saved.relative, display: saved.display }, display: saved.display };
+  }
 
   const rel = sanitizeRelativeDir(opts.relDir);
   const dir = winPath(saveTarget.path, rel);
@@ -175,10 +184,34 @@ export async function saveForUser(userId: string, opts: { file: string; mime: st
     await smbEnsureDir(saveTarget, dir);
     const name = await smbAvailableName(saveTarget, dir, savedName(opts.createdAt, opts.modelName, opts.index, path.extname(opts.file)));
     await smb(saveTarget, [`put ${quote(temp)} ${quote(`${dir}\\${name}`)}`]);
-    return { relative: `${rel}/${name}`, display: `${targetLabel(saveTarget)}\\${rel.replace(/\//g, '\\')}\\${name}` };
+    const display = `${targetLabel(saveTarget)}\\${rel.replace(/\//g, '\\')}\\${name}`;
+    return { entry: { type: 'smb', host: saveTarget.host, share: saveTarget.share, path: `${dir}\\${name}`, display }, display };
   } finally {
     await rm(temp, { force: true });
   }
+}
+
+/**
+ * Remove a copy made by Save. A file that is already gone counts as removed. Copies on an SMB share
+ * other than the current save location can't be reached (no stored credentials for it).
+ */
+export async function deleteSaved(userId: string, entry: SavedEntry): Promise<void> {
+  const { saveTarget } = await getUserSettings(userId);
+  if (typeof entry === 'object' && entry.type === 'local') {
+    await rm(resolveInside(config.exportRoot, entry.relative), { force: true });
+    return;
+  }
+  if (typeof entry === 'object' && entry.type === 'smb') {
+    if (saveTarget?.type !== 'smb' || saveTarget.host.toLowerCase() !== entry.host.toLowerCase() || saveTarget.share.toLowerCase() !== entry.share.toLowerCase()) {
+      throw new ProviderError(`The copy is on \\\\${entry.host}\\${entry.share}, which is not your save location any more. Delete it there by hand.`, 400);
+    }
+    await smb(saveTarget, [`del ${quote(entry.path)}`], [/NO_SUCH_FILE/, /OBJECT_NAME_NOT_FOUND/, /OBJECT_PATH_NOT_FOUND/]);
+    return;
+  }
+  // Older string records: relative to the current location of the same kind.
+  if (!saveTarget) throw new ProviderError('Choose a save location first: Settings → Save location.', 400);
+  if (saveTarget.type === 'local') await rm(resolveInside(config.exportRoot, entry), { force: true });
+  else await smb(saveTarget, [`del ${quote(winPath(saveTarget.path, entry))}`], [/NO_SUCH_FILE/, /OBJECT_NAME_NOT_FOUND/, /OBJECT_PATH_NOT_FOUND/]);
 }
 
 /** Check a save location works by writing and removing a small probe file. */

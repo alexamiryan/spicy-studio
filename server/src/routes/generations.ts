@@ -6,7 +6,7 @@ import { ownedIds, ownRow, ownWorkspace } from '../services/access.js';
 import { slug } from '../services/exports.js';
 import { ACTIVE, createGenerations, type GenerateInput } from '../services/generations.js';
 import { collectGarbage } from '../services/media.js';
-import { saveForUser } from '../services/saveTargets.js';
+import { saveForUser, deleteSaved, type SavedEntry } from '../services/saveTargets.js';
 import { mediaDir } from '../config.js';
 import { assetDto, decodeCursor, encodeCursor, generationDto, refDto } from './dto.js';
 
@@ -156,8 +156,24 @@ export function generationRoutes(app: FastifyInstance) {
       file: a.file, mime: a.mime, relDir: a.kind === 'video' ? a.video_export_dir : a.image_export_dir,
       createdAt: new Date(a.created_at), modelName: a.model_name, index: a.idx,
     });
-    await q(`update assets set exported_paths = exported_paths || $2::jsonb where id = $1`, [id, JSON.stringify([result.relative])]);
+    await q(`update assets set exported_paths = exported_paths || $2::jsonb where id = $1`, [id, JSON.stringify([result.entry])]);
     return { path: result.display };
+  });
+
+  // "Unsave": remove the copies Save made (only those; the result itself stays).
+  app.delete('/api/assets/:id/export', async request => {
+    const { id } = request.params as { id: string };
+    const a = await ownRow(uid(request), 'assets', id);
+    const entries: SavedEntry[] = a.exported_paths || [];
+    const kept: SavedEntry[] = [];
+    let error: unknown;
+    for (const entry of entries) {
+      try { await deleteSaved(uid(request), entry); }
+      catch (e) { kept.push(entry); error ||= e; }
+    }
+    await q(`update assets set exported_paths = $2::jsonb where id = $1`, [id, JSON.stringify(kept)]);
+    if (error) throw error;
+    return { removed: entries.length };
   });
 
   app.get('/api/assets/:id/download', async (request, reply) => {

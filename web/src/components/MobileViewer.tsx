@@ -2,7 +2,7 @@ import { clsx } from 'clsx';
 import { Check, ChevronUp, Clapperboard, Download, FolderInput, ImagePlus, Info as InfoIcon, Loader2, MapPin, Pause, Play, RotateCcw, Save, Star, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
+import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset, toggleSave } from '../lib/actions';
 import { useStore } from '../lib/store';
 import type { Asset } from '../lib/types';
 import { Info, useSaveTarget } from './Viewer';
@@ -70,7 +70,7 @@ function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
   const { set, workspaceId } = useStore();
   const [saving, setSaving] = useState(false);
   const target = useSaveTarget(asset);
-  const save = async () => { if (saving) return; setSaving(true); await saveAsset(asset); setSaving(false); };
+  const save = async () => { if (saving) return; setSaving(true); await toggleSave(asset); setSaving(false); };
   const action = 'flex min-w-0 flex-1 flex-col items-center gap-1 py-1.5 text-[10px] font-medium text-white/85 active:text-white disabled:opacity-40';
   return (
     <div className="space-y-2 px-3">
@@ -80,7 +80,7 @@ function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
           asset.exported ? 'border border-accent/50 bg-black/40 text-accent' : 'bg-accent text-accent-fg')}
       >
         {saving ? <Loader2 className="size-5 animate-spin" /> : asset.exported ? <Check className="size-5" /> : <Save className="size-5" />}
-        {saving ? 'Saving…' : asset.exported ? 'Saved · save again' : 'Save'}
+        {saving ? (asset.exported ? 'Removing…' : 'Saving…') : asset.exported ? 'Saved · tap to remove' : 'Save'}
       </button>
       {target && <div className="-mt-1 truncate text-center text-[10px] text-white/50">to {target}</div>}
       <div className="flex items-stretch justify-between">

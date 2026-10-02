@@ -6,7 +6,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
-import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset } from '../lib/actions';
+import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, toggleSave } from '../lib/actions';
 import { formatCost } from '../lib/models';
 import { saveFolderLabel, useMySettings, useWorkspaces } from '../lib/queries';
 import { useStore } from '../lib/store';
@@ -87,7 +87,7 @@ const Kbd = ({ children }: { children: string }) => (
 function SaveButton({ asset }: { asset: Asset }) {
   const [saving, setSaving] = useState(false);
   const target = useSaveTarget(asset);
-  const save = async () => { if (saving) return; setSaving(true); await saveAsset(asset); setSaving(false); };
+  const save = async () => { if (saving) return; setSaving(true); await toggleSave(asset); setSaving(false); };
   const saved = asset.exported;
   return (
     <div className="space-y-1.5">
@@ -101,7 +101,7 @@ function SaveButton({ asset }: { asset: Asset }) {
         )}
       >
         {saving ? <Loader2 className="size-5 animate-spin" /> : saved ? <Check className="size-5" /> : <Save className="size-5" />}
-        {saving ? 'Saving…' : saved ? 'Saved · save again' : 'Save'}
+        {saving ? (saved ? 'Removing…' : 'Saving…') : saved ? 'Saved · tap to remove' : 'Save'}
         {!saving && <Kbd>S</Kbd>}
       </button>
       {target && <div className="truncate text-center text-xs text-faint" title={target}>to {target}</div>}

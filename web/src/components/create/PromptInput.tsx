@@ -16,6 +16,9 @@ export function PromptInput({ model, onSubmit, rows = 2, autoFocus }: { model?: 
   const ref = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
+  const list = useRef<HTMLDivElement>(null);
+  // Keep the keyboard-highlighted suggestion visible in the scrolling list.
+  useEffect(() => { (list.current?.children[highlight] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }); }, [highlight]);
 
   const primary = primaryRefField(model);
   const images = primary ? draft.refSlots[primary.key] || [] : [];
@@ -30,7 +33,7 @@ export function PromptInput({ model, onSubmit, rows = 2, autoFocus }: { model?: 
         hint: `Element · ${e.refs.length} photo${e.refs.length === 1 ? '' : 's'}${model?.nativeElements ? ` · sent to ${model.providerId === 'higgsfield' ? 'Higgsfield' : 'the model'} as an element` : ''}`,
       })) : []),
     ];
-    return list.filter(s => s.token.toLowerCase().startsWith(q) || (q.length > 1 && s.hint.toLowerCase().includes(q))).slice(0, 8);
+    return list.filter(s => s.token.toLowerCase().startsWith(q) || (q.length > 1 && s.hint.toLowerCase().includes(q)));
   }, [query, images, elements, primary, model]);
 
   // Auto-grow up to a limit.
@@ -86,7 +89,7 @@ export function PromptInput({ model, onSubmit, rows = 2, autoFocus }: { model?: 
         className="scrollbar-thin block w-full resize-none bg-transparent px-1 py-2 text-[15px] leading-relaxed text-fg outline-none placeholder:text-faint"
       />
       {suggestions.length > 0 && (
-        <div className="fade-in absolute bottom-full left-0 z-40 mb-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line-strong bg-panel-2 p-1.5 shadow-2xl">
+        <div ref={list} className="fade-in scrollbar-thin absolute bottom-full left-0 z-40 mb-2 max-h-[min(22rem,50dvh)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl border border-line-strong bg-panel-2 p-1.5 shadow-2xl">
           {suggestions.map((s, i) => (
             <button
               key={s.token}

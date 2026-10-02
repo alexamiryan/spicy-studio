@@ -134,6 +134,24 @@ export async function downloadAsset(asset: Asset) {
 }
 
 /** "Save": copy a result into the workspace's save folder (e.g. on the NAS). */
+/** Save, or (when already saved) remove the saved copy: for second thoughts. */
+export async function toggleSave(asset: Asset): Promise<boolean> {
+  if (!asset.exported) return saveAsset(asset);
+  const { toast } = useStore.getState();
+  try {
+    await api.del(`/api/assets/${asset.id}/export`);
+    const { viewer, set } = useStore.getState();
+    if (viewer) set({ viewer: { ...viewer, list: viewer.list.map(a => (a.id === asset.id ? { ...a, exported: false } : a)) } });
+    invalidateGallery(asset.workspaceId);
+    toast('Removed the saved copy');
+    return true;
+  } catch (error) {
+    toast(errorText(error), 'error');
+    invalidateGallery(asset.workspaceId);
+    return false;
+  }
+}
+
 export async function saveAsset(asset: Asset): Promise<boolean> {
   const { toast } = useStore.getState();
   try {
