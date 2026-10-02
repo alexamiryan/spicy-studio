@@ -426,7 +426,7 @@ function SelectionBar({ inline }: { inline?: boolean }) {
       {rangeGap(selected) && (
         <Button variant="ghost" onClick={fillRange} title="Select everything between the first and last selected (desktop: Shift+click)">Range</Button>
       )}
-      {inline && <span className="hidden text-xs text-faint xl:inline">Shift+click selects a range</span>}
+      {inline && <span className="hidden whitespace-nowrap text-xs text-faint 2xl:inline">Shift+click selects a range</span>}
       <span className={inline ? 'w-2' : 'flex-1'} />
       <MoveMenu side={inline ? 'bottom' : 'top'} align={inline ? 'left' : 'left'} disabled={!selected.length} busy={moving} targets={[
           { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: selected } }) },
@@ -462,7 +462,7 @@ export function Gallery() {
   return (
     <div className="min-w-0 flex-1 px-2 pb-48 pt-3 md:px-5">
       {/* One line on desktop, so starting a selection never pushes the grid down. */}
-      <div className="mb-3 flex min-h-10 flex-wrap items-center gap-2 md:flex-nowrap">
+      <div className="mb-3 flex min-h-10 flex-wrap items-center gap-2 md:sticky md:top-[calc(3.5rem+1px+env(safe-area-inset-top))] md:z-20 md:-mx-5 md:-mt-3 md:flex-nowrap md:bg-bg md:px-5 md:py-2.5">
         <Segmented
           className={clsx('lg:hidden', selecting && 'md:hidden')}
           value={view}

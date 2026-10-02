@@ -92,7 +92,8 @@ export const useStore = create<State>((set, get) => ({
   workspaceId: (ui.workspaceId as string) || null,
   draft: ui.workspaceId ? loadDraft(ui.workspaceId as string) : emptyDraft(),
   view: (ui.view as State['view']) || 'timeline',
-  folder: null,
+  // The open folder survives a reload (a folder deleted meanwhile falls back to the folder grid).
+  folder: (ui.view === 'folders' && typeof ui.folder === 'string' && ui.folder) || null,
   kind: (ui.kind as State['kind']) || 'all',
   selecting: false,
   selected: [],
@@ -140,7 +141,7 @@ useStore.subscribe(state => {
   saveTimer = window.setTimeout(() => {
     try {
       if (state.workspaceId) localStorage.setItem(draftKey(state.workspaceId), JSON.stringify(state.draft));
-      localStorage.setItem(uiKey, JSON.stringify({ workspaceId: state.workspaceId, view: state.view, kind: state.kind }));
+      localStorage.setItem(uiKey, JSON.stringify({ workspaceId: state.workspaceId, view: state.view, folder: state.folder, kind: state.kind }));
     } catch { /* storage full or blocked */ }
   }, 300);
 });
