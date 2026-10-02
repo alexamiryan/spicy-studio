@@ -134,6 +134,19 @@ Notes:
   in `provider_elements` by a signature of name/description/files. Higgsfield can't edit elements, so a
   changed element creates a new one. Quotes never create elements. Kling 3.0 needs a `start_image`.
 
+**PoYo** (`poyo.ts`): REST (`https://api.poyo.ai/api`, Bearer key): `POST /generate/submit {model, input}`,
+`GET /generate/status/{id}` (`not_started|running|finished|failed`, `files[].file_url`, `credits_amount`),
+`POST /common/upload/stream` (multipart; images kept 72 h, videos 24 h → `expiresAt`), `GET /user/balance`.
+PoYo has no catalog endpoint: `server/scripts/poyo-catalog.ts` (`npm run poyo:catalog -w server`) builds
+`src/providers/poyo-catalog.json` from the pricing page's embedded product data (names, model ids, price tiers)
+and each doc page's OpenAPI `input` schema. Re-run it to pick up new models and commit the diff. At runtime the
+schemas go through SpicyAPI's `normalizeSchema` after `simplify()` (preset branch of `size` unions; `n`, links
+and documents dropped); `forVariant()` shapes each variant (plain vs `-edit`, text- vs image-to-video). There
+is no quote endpoint: `estimateCredits()` picks the best-matching published tier (× seconds when per second).
+
+Provider API-key routes are generic (`PUT/DELETE /api/providers/:id/key`, validated with `balance()`), and a
+provider's 401 is sent to the browser as 400 so a wrong provider key never signs the user out.
+
 **Mock** (`mock.ts`, only with `MOCK_PROVIDER=1`): free, local files, configurable failures.
 
 ### Environment library

@@ -13,7 +13,7 @@ async function status(userId: string, id: string) {
   const provider = providersFor(userId).find(p => p.id === id)!;
   const row = await getProviderRow(userId, id);
   let detail: string | undefined;
-  if (id === 'spicyapi') {
+  if (provider.authType === 'apiKey') {
     const key: string = row.credentials.apiKey || '';
     detail = key ? `Key …${key.slice(-4)}` : undefined;
   } else if (row.credentials.connectedAt) {
@@ -28,20 +28,31 @@ const favorites = async (userId: string) =>
 export function providerRoutes(app: FastifyInstance) {
   app.get('/api/providers', async request => Promise.all(providersFor(uid(request)).map(p => status(uid(request), p.id))));
 
-  app.put('/api/providers/spicyapi/key', async request => {
+  /** API-key providers (SpicyAPI, PoYo): the key is checked with a balance call before it's kept. */
+  const keyProvider = (userId: string, id: string) => {
+    const provider = providersFor(userId).find(p => p.id === id);
+    if (!provider || provider.authType !== 'apiKey' || !provider.balance) throw new ProviderError('Unknown provider.', 404);
+    return provider;
+  };
+
+  app.put('/api/providers/:id/key', async request => {
     const userId = uid(request);
+    const { id } = request.params as { id: string };
+    const provider = keyProvider(userId, id);
     const key = String((request.body as any)?.apiKey || '').trim();
-    if (!key) throw new ProviderError('Paste your SpicyAPI key.', 400);
-    const previous = (await getProviderRow(userId, 'spicyapi')).credentials;
-    await saveCredentials(userId, 'spicyapi', { apiKey: key });
-    try { await spicyFor(userId).balance(); }
-    catch (error) { await saveCredentials(userId, 'spicyapi', previous, true); throw error; }
-    return status(userId, 'spicyapi');
+    if (!key) throw new ProviderError(`Paste your ${provider.name} API key.`, 400);
+    const previous = (await getProviderRow(userId, id)).credentials;
+    await saveCredentials(userId, id, { apiKey: key });
+    try { await provider.balance!(); }
+    catch (error) { await saveCredentials(userId, id, previous, true); throw error; }
+    return status(userId, id);
   });
 
-  app.delete('/api/providers/spicyapi/key', async request => {
-    await saveCredentials(uid(request), 'spicyapi', {}, true);
-    return status(uid(request), 'spicyapi');
+  app.delete('/api/providers/:id/key', async request => {
+    const { id } = request.params as { id: string };
+    keyProvider(uid(request), id);
+    await saveCredentials(uid(request), id, {}, true);
+    return status(uid(request), id);
   });
 
   app.put('/api/providers/:id/enabled', async request => {

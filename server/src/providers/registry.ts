@@ -1,5 +1,6 @@
 import { HiggsfieldProvider } from './higgsfield.js';
 import { MockProvider } from './mock.js';
+import { PoyoProvider } from './poyo.js';
 import { SpicyProvider } from './spicyapi.js';
 import { ProviderError, type Provider } from './types.js';
 
@@ -14,6 +15,7 @@ function create(userId: string): Provider[] {
   return [
     new SpicyProvider(userId),
     new HiggsfieldProvider(userId),
+    new PoyoProvider(userId),
     ...(process.env.MOCK_PROVIDER === '1' ? [new MockProvider()] : []),
   ];
 }

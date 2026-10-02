@@ -27,7 +27,8 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'warn' }, trustP
 app.setErrorHandler((error: any, _request, reply) => {
   // Malformed ids reach uuid columns as Postgres "invalid input syntax" errors.
   if (error?.code === '22P02') return reply.code(400).send({ error: 'Invalid id.' });
-  const status = error instanceof ProviderError ? error.status : error.statusCode && error.statusCode < 500 ? error.statusCode : 500;
+  // A provider rejecting its API key is not this app's login expiring (401 makes the web app sign out).
+  const status = error instanceof ProviderError ? (error.status === 401 ? 400 : error.status) : error.statusCode && error.statusCode < 500 ? error.statusCode : 500;
   if (status >= 500) app.log.error(error);
   reply.code(status).send({ error: error.message || 'Unexpected error' });
 });

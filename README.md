@@ -8,6 +8,8 @@ one-click saving to a NAS. Dark mode, works on desktop and phones (installable a
 Providers:
 
 - **[SpicyAPI](https://spicyapi.ai)**: 150+ image and video models with an API key.
+- **[PoYo](https://poyo.ai)**: ~100 image and video models (Seedream, Nano Banana, Kling, Wan, Veo, Seedance,
+  Flux…) with an API key, paid with PoYo credits.
 - **[Higgsfield](https://higgsfield.ai)**: your Higgsfield account through its MCP server
   (OAuth sign-in, paid with your Higgsfield credits). Gives access to models such as
   Seedream 4.5, Kling 3.0 and Seedance 2.0.
@@ -57,7 +59,7 @@ docker compose up -d --build
 
 Open <http://localhost:3000> and create the admin account. Then, in **Settings**:
 
-- **Providers → SpicyAPI**: paste your API key.
+- **Providers → SpicyAPI** / **PoYo**: paste your API key (PoYo: poyo.ai/dashboard/api-key).
 - **Providers → Higgsfield**: *Connect Higgsfield* and sign in. Do this from `http://localhost:3000`
   or an HTTPS address: Higgsfield's sign-in may refuse to redirect back to a plain-HTTP LAN address.
   Once connected it works from every device. Generations are always paid with credits, never with

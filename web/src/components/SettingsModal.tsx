@@ -15,6 +15,15 @@ function refreshProviders() {
   queryClient.invalidateQueries({ queryKey: ['models'] });
 }
 
+/** Where to get each API key, shown under the key field. */
+const KEY_HINTS: Record<string, { placeholder: string; help?: React.ReactNode }> = {
+  spicyapi: { placeholder: 'Paste API key (sk-spicy-…)' },
+  poyo: {
+    placeholder: 'Paste your PoYo API key',
+    help: <>Create a key at <a className="text-accent underline-offset-2 hover:underline" href="https://poyo.ai/dashboard/api-key" target="_blank" rel="noreferrer">poyo.ai/dashboard/api-key</a>. Generations are paid with your PoYo credits.</>,
+  },
+};
+
 function ProviderCard({ p }: { p: ProviderStatus }) {
   const toast = useStore(s => s.toast);
   const [key, setKey] = useState('');
@@ -55,7 +64,7 @@ function ProviderCard({ p }: { p: ProviderStatus }) {
         <form className="flex gap-2" onSubmit={e => { e.preventDefault(); run('save', () => api.put(`/api/providers/${p.id}/key`, { apiKey: key }), 'API key saved').then(() => setKey('')); }}>
           <div className="relative flex-1">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
-            <input className={clsx(inputClass, 'pl-9')} type="password" autoComplete="off" placeholder={p.configured ? 'Replace API key…' : 'Paste API key (sk-spicy-…)'} value={key} onChange={e => setKey(e.target.value)} />
+            <input className={clsx(inputClass, 'pl-9')} type="password" autoComplete="off" placeholder={p.configured ? 'Replace API key…' : KEY_HINTS[p.id]?.placeholder || 'Paste API key'} value={key} onChange={e => setKey(e.target.value)} />
           </div>
           <Button type="submit" variant="primary" disabled={!key.trim()} loading={busy === 'save'}>Save</Button>
         </form>
@@ -64,6 +73,7 @@ function ProviderCard({ p }: { p: ProviderStatus }) {
           Signs in with your Higgsfield account over MCP and spends your subscription credits (never unlimited generations). The login stays active until you disconnect.
         </p>
       )}
+      {p.authType === 'apiKey' && KEY_HINTS[p.id]?.help && <p className="text-xs text-muted">{KEY_HINTS[p.id]!.help}</p>}
 
       <div className="flex flex-wrap gap-2">
         {p.authType === 'oauth' && (
