@@ -11,6 +11,7 @@ import { errorText, useStore } from '../../lib/store';
 import type { Generation, Modality, ModelInfo } from '../../lib/types';
 import { Button, IconButton, Modal, Segmented, useIsMobile } from '../ui';
 import { ModelPicker } from './ModelPicker';
+import { PresetsControl } from './Presets';
 import { PromptInput } from './PromptInput';
 import { RefTray } from './RefTray';
 import { BatchControl, FolderControl, MoreSettings, SettingControl } from './SettingsControls';
@@ -202,6 +203,7 @@ function DockedCreateBox() {
         <div className="mt-1 flex items-end gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             <ModalityTabs value={modality} />
+            <PresetsControl />
             <ModelPicker modality={modality} current={model} />
             <SettingsList model={model} />
             <FolderControl />
@@ -241,6 +243,7 @@ function MobileCreate() {
         <div className="space-y-5 p-4">
           <div className="space-y-2">
             <ModalityTabs value={draft.modality} full />
+            <PresetsControl row />
           </div>
           {Boolean(model?.refFields.length) && <RefTray model={model} layout="stacked" />}
           <section className="space-y-1.5">

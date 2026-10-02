@@ -12,6 +12,7 @@ import { saveFolderLabel, useMySettings, useWorkspaces } from '../lib/queries';
 import { useStore } from '../lib/store';
 import type { Asset, GenerationDetail, Ref } from '../lib/types';
 import { AudioFace, Preview } from './RefPicker';
+import { MoveMenu } from './MoveMenu';
 import { MobileViewer } from './MobileViewer';
 import { IconButton, Spinner, useIsMobile } from './ui';
 
@@ -111,8 +112,8 @@ function SaveButton({ asset }: { asset: Asset }) {
 function SecondaryAction({ icon, label, kbd, ...props }: { icon: React.ReactNode; label: string; kbd?: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button {...props} title={props.title || (kbd ? `${label} (${kbd})` : label)}
-      className="flex h-14 flex-col items-center justify-center gap-1 rounded-xl bg-panel-3 text-[11px] font-medium text-muted transition hover:bg-white/12 hover:text-fg disabled:opacity-40 disabled:hover:bg-panel-3">
-      {icon}{label}
+      className="flex h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-panel-3 px-0.5 text-[11px] font-medium tracking-tight text-muted transition hover:bg-white/12 hover:text-fg disabled:opacity-40 disabled:hover:bg-panel-3">
+      {icon}<span className="max-w-full truncate">{label}</span>
     </button>
   );
 }
@@ -196,25 +197,25 @@ function DesktopViewer() {
         <div className="space-y-2 border-b border-line p-3 md:pt-2">
           <SaveButton asset={asset} />
           <div className="flex gap-1.5">
-            <div className={clsx('grid flex-1 gap-1.5', asset.kind === 'image' ? 'grid-cols-6' : 'grid-cols-4')}>
+            <div className={clsx('grid min-w-0 flex-1 gap-1.5', asset.kind === 'image' ? 'grid-cols-5' : 'grid-cols-4')}>
               {asset.kind === 'image' && (
                 <SecondaryAction icon={<Clapperboard className="size-4" />} label="Animate" kbd="A" onClick={() => animateAsset(asset)}
                   title="Animate: use as start frame with your last video settings and references (A)" />
               )}
               <SecondaryAction icon={<RotateCcw className="size-4" />} label="Recreate" kbd="R" onClick={() => recreate(asset.generationId, asset)} />
               <SecondaryAction icon={<ImagePlus className="size-4" />} label="As ref" onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'} title="Use as reference in the create box" />
-              {asset.kind === 'image' && (
-                <SecondaryAction icon={<Star className="size-4" />} label="Model ref" onClick={() => addToModelRefs(asset)} title="Add to Model refs" />
-              )}
-              {asset.kind === 'image' && (
-                <SecondaryAction icon={<MapPin className="size-4" />} label="Environment" onClick={() => addToEnvironments(asset)} title="Add to your environment library (shared by all workspaces)" />
-              )}
-              <SecondaryAction icon={<FolderInput className="size-4" />} label="Move" onClick={() => set({ modal: { type: 'move', assetIds: [asset.id] } })} title="Move to another folder" />
+              <MoveMenu align="right" targets={[
+                { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: [asset.id] } }) },
+                ...(asset.kind === 'image' ? [
+                  { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: 'The result stays in your timeline', onSelect: () => addToModelRefs(asset) },
+                  { key: 'environments', label: 'Environments', icon: <MapPin className="size-4" />, hint: 'Shared by all your workspaces', onSelect: () => addToEnvironments(asset) },
+                ] : []),
+              ]} trigger={toggle => <SecondaryAction icon={<FolderInput className="size-4" />} label="Move to" onClick={toggle} title="Move to a folder, Model refs or Environments" />} />
               <SecondaryAction icon={<Download className="size-4" />} label="Download" onClick={() => downloadAsset(asset)} title="Download to this device" />
             </div>
             <button
               aria-label="Delete" title="Delete (Del)" onClick={() => deleteAssets(workspaceId!, [asset.id])}
-              className="flex w-12 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger transition hover:bg-danger/20"
+              className="flex w-10 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger transition hover:bg-danger/20"
             >
               <Trash2 className="size-4" />
             </button>

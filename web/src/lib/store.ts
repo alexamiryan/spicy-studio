@@ -39,6 +39,8 @@ interface State {
   createOpen: boolean; // mobile create sheet
   /** The result last used for Recreate; the reference picker offers it first. */
   recreatedFrom: Asset | null;
+  /** The preset last loaded or saved per modality (marked in the presets list). */
+  activePreset: Partial<Record<Modality, string>>;
   /** A multi-file upload in progress (shown as a progress pill). */
   upload: { done: number; total: number; label: string } | null;
   toasts: Toast[];
@@ -82,6 +84,7 @@ export const useStore = create<State>((set, get) => ({
   createOpen: false,
   recreatedFrom: null,
   upload: null,
+  activePreset: {},
   toasts: [],
   setWorkspace: id => {
     if (get().workspaceId === id) return;

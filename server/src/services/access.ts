@@ -16,8 +16,8 @@ export async function ownWorkspace(userId: string | undefined, workspaceId: unkn
   return row || notFound('Workspace');
 }
 
-type Owned = 'folders' | 'refs' | 'elements' | 'generations' | 'assets';
-const LABEL: Record<Owned, string> = { folders: 'Folder', refs: 'Reference', elements: 'Element', generations: 'Generation', assets: 'Result' };
+type Owned = 'folders' | 'refs' | 'elements' | 'generations' | 'assets' | 'presets';
+const LABEL: Record<Owned, string> = { folders: 'Folder', refs: 'Reference', elements: 'Element', generations: 'Generation', assets: 'Result', presets: 'Preset' };
 
 /** Load a row the caller owns (through its workspace), or 404. */
 export async function ownRow(userId: string | undefined, table: Owned, id: unknown) {

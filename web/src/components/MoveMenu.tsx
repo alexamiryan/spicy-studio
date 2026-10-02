@@ -5,13 +5,15 @@ import { Button, Popover } from './ui';
 export interface MoveTarget { key: string; label: string; icon: ReactNode; hint?: string; onSelect: () => void }
 
 /** One "Move to" button for a selection; the menu lists where the items can go. */
-export function MoveMenu({ targets, disabled, busy, size, side = 'bottom', align = 'right' }: {
+export function MoveMenu({ targets, disabled, busy, size, side = 'bottom', align = 'right', trigger }: {
   targets: MoveTarget[]; disabled?: boolean; busy?: boolean; size?: 'sm'; side?: 'top' | 'bottom'; align?: 'left' | 'right';
+  /** Custom trigger (gets the open/close toggle); defaults to a "Move to" button. */
+  trigger?: (toggle: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen} title="Move to" side={side} align={align} width="w-72"
-      trigger={
+      trigger={trigger ? trigger(() => setOpen(o => !o)) :
         <Button size={size} disabled={disabled || !targets.length} loading={busy} onClick={() => setOpen(o => !o)}>
           {!busy && <FolderInput className="size-4" />}Move to<ChevronDown className="size-3.5 opacity-60" />
         </Button>

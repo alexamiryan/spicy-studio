@@ -150,6 +150,13 @@ Every upload in the web app goes through `actions.ts: uploadInBatches` (4 files 
 pill, per-file retry); the server's multipart cap (500 files, 200 MB per file) is only a safety limit,
 and files over it are dropped silently by the multipart parser, so never upload big selections in one request.
 
+### Presets
+
+`presets` (`routes/presets.ts`) store a create-box state per workspace and modality: model id, prompt,
+settings, ref ids per field, folder, batch. Saving validates refs/folder against the workspace; loading
+(`actions.ts: loadPreset`) works like Recreate and skips references deleted since. Names are unique per
+workspace + modality. UI: `components/create/Presets.tsx`.
+
 ### @mentions and elements
 
 `services/prompt.ts: resolvePrompt()` turns `@image2` into `image 2`. For normal models `@Mia` attaches

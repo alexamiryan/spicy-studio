@@ -76,6 +76,24 @@ export interface Ref {
   createdAt: string;
 }
 
+/** A saved create-box state, per workspace and photo/video. */
+export interface Preset {
+  id: string;
+  workspaceId: string;
+  modality: Modality;
+  name: string;
+  modelId: string;
+  prompt: string;
+  settings: Record<string, unknown>;
+  refSlots: Record<string, string[]>;
+  refs: Ref[];
+  folderId: string | null;
+  batch: number;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+}
+
 /** A photo in the user's environment library (shared by all their workspaces). */
 export interface Environment {
   id: string;

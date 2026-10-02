@@ -30,6 +30,8 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 - **Elements**: named groups of references (`@Mia`). Mentioning one attaches its photos, or, on
   models that support it (Kling O3 on SpicyAPI; Kling 3.0, Seedance 2.0, Seedream and others on
   Higgsfield), passes it to the provider as a native element/character.
+- **Presets**: save the create box (model, prompt, settings, references, folder, batch) under a name such as
+  "Mirror selfie at home" and load it with one tap. Per workspace, separate for photos and videos.
 - **Recreate** loads a result's prompt, model, settings and references back into the create box;
   **Animate** turns a photo into a video with your last video settings.
 - **Library and timeline**: infinite grid with photo/video filters, folders, multi-select, move,

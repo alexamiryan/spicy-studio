@@ -2,7 +2,7 @@ import { api } from './api';
 import { defaultSettings, primaryRefField, remapRefs } from './models';
 import { invalidateGallery, keys, queryClient } from './queries';
 import { errorText, useStore } from './store';
-import type { Asset, Environment, GenerationDetail, Modality, ModelGroup, ModelInfo, Ref, Workspace } from './types';
+import type { Asset, Environment, GenerationDetail, Modality, ModelGroup, ModelInfo, Preset, Ref, Workspace } from './types';
 
 export function cachedModel(modelId?: string, modality?: Modality): ModelInfo | undefined {
   if (!modelId) return undefined;
@@ -386,4 +386,75 @@ export async function environmentRefs(workspaceId: string, ids: string[]): Promi
   const refs = await api.post<Ref[]>('/api/environments/use', { workspaceId, ids });
   queryClient.invalidateQueries({ queryKey: keys.refs(workspaceId) });
   return refs;
+}
+
+// ---------------------------------------------------------------- presets
+
+/** The create box's current state for one modality, as stored in a preset. */
+function presetState(modality: Modality) {
+  const { draft } = useStore.getState();
+  const modelId = draft.models[modality];
+  if (!modelId) throw new Error('Pick a model first.');
+  return {
+    modelId, prompt: draft.prompt, settings: draft.settings[modelId] || {},
+    refSlots: Object.fromEntries(Object.entries(draft.refSlots).map(([key, refs]) => [key, refs.map(r => r.id)])),
+    folderId: draft.folderId, batch: draft.batch,
+  };
+}
+
+const refreshPresets = (workspaceId: string) => queryClient.invalidateQueries({ queryKey: keys.presets(workspaceId) });
+const markActive = (modality: Modality, id: string | undefined) =>
+  useStore.getState().set({ activePreset: { ...useStore.getState().activePreset, [modality]: id } });
+
+export async function savePreset(workspaceId: string, modality: Modality, name: string) {
+  const preset = await api.post<Preset>('/api/presets', { workspaceId, modality, name, ...presetState(modality) });
+  markActive(modality, preset.id);
+  refreshPresets(workspaceId);
+  return preset;
+}
+
+/** Replace a preset's saved state with what's in the create box now. */
+export async function updatePreset(preset: Preset) {
+  const updated = await api.patch<Preset>(`/api/presets/${preset.id}`, { state: presetState(preset.modality) });
+  markActive(preset.modality, preset.id);
+  refreshPresets(preset.workspaceId);
+  return updated;
+}
+
+export async function renamePreset(preset: Preset, name: string) {
+  await api.patch(`/api/presets/${preset.id}`, { name });
+  refreshPresets(preset.workspaceId);
+}
+
+export async function deletePreset(preset: Preset) {
+  await api.del(`/api/presets/${preset.id}`);
+  if (useStore.getState().activePreset[preset.modality] === preset.id) markActive(preset.modality, undefined);
+  refreshPresets(preset.workspaceId);
+}
+
+/** Load a preset into the create box (like Recreate, without having to find an old result). */
+export async function loadPreset(preset: Preset) {
+  const { toast, patchDraft, draft } = useStore.getState();
+  const byId = new Map(preset.refs.map(r => [r.id, r]));
+  let missing = 0;
+  const refSlots: Record<string, Ref[]> = {};
+  for (const [key, ids] of Object.entries(preset.refSlots || {})) {
+    refSlots[key] = ids.map(id => byId.get(id)).filter((r): r is Ref => { if (!r) missing++; return Boolean(r); });
+  }
+  await loadModels(preset.modality).catch(() => null);
+  const model = cachedModel(preset.modelId, preset.modality);
+  patchDraft({
+    modality: preset.modality,
+    models: { ...draft.models, [preset.modality]: preset.modelId },
+    settings: { ...draft.settings, [preset.modelId]: model ? defaultSettings(model, preset.settings) : preset.settings },
+    prompt: preset.prompt,
+    refSlots: model ? remapRefs(refSlots, model) : refSlots,
+    folderId: preset.folderId,
+    batch: preset.batch || 1,
+  });
+  markActive(preset.modality, preset.id);
+  api.post(`/api/presets/${preset.id}/used`).then(() => refreshPresets(preset.workspaceId)).catch(() => {});
+  if (!model) toast(`${preset.modelId.split(':').slice(1).join(':')} is not available right now. The rest was loaded.`, 'error');
+  else if (missing) toast(`Loaded "${preset.name}". ${missing} reference${missing > 1 ? 's were' : ' was'} deleted since it was saved.`, 'error');
+  else toast(`Loaded "${preset.name}"`);
 }
