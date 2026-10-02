@@ -35,7 +35,7 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 - **Recreate** loads a result's prompt, model, settings and references back into the create box;
   **Animate** turns a photo into a video with your last video settings.
 - **Library and timeline**: infinite grid with photo/video filters, folders, multi-select, move,
-  delete, unseen markers, a full-screen viewer (keyboard shortcuts on desktop, Photos-style gestures
+  delete (Shift+click or **Range** selects a range), unseen markers, a full-screen viewer (keyboard shortcuts on desktop, Photos-style gestures
   on phones), and live updates across devices.
 - **Save** copies a result into the workspace's folder on your save location: an **SMB share**
   (e.g. a NAS) or a folder on the server. Optionally strips EXIF/XMP/IPTC/C2PA metadata losslessly.

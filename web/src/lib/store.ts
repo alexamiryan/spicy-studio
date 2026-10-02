@@ -26,8 +26,18 @@ export type Modal =
 
 export interface Toast { id: number; text: string; tone?: 'error' | 'ok' }
 
+/** Result ids in the order the grid shows them (set by the grid; used for range selection). */
+let gridOrder: string[] = [];
+export const setGridOrder = (ids: string[]) => { gridOrder = ids; };
+export const rangeGap = (selected: string[]) => {
+  const positions = selected.map(id => gridOrder.indexOf(id)).filter(i => i >= 0);
+  return positions.length >= 2 && Math.max(...positions) - Math.min(...positions) + 1 > positions.length;
+};
+
 interface State {
   workspaceId: string | null;
+  /** The result clicked last while selecting: Shift+click selects from here. */
+  selectAnchor: string | null;
   draft: Draft;
   view: 'timeline' | 'folders';
   folder: string | null; // null = folder grid (in folders view); 'unsorted' | folder id
@@ -52,6 +62,10 @@ interface State {
   setDraft: (draft: Draft) => void;
   set: (patch: Partial<Omit<State, 'draft'>>) => void;
   toggleSelect: (id: string) => void;
+  /** Select everything between the last clicked result and this one (in grid order). */
+  selectRangeTo: (id: string) => void;
+  /** Select everything between the first and last selected results (in grid order). */
+  fillRange: () => void;
   clearSelection: () => void;
   toast: (text: string, tone?: Toast['tone']) => void;
 }
@@ -86,6 +100,7 @@ export const useStore = create<State>((set, get) => ({
   modal: null,
   createOpen: false,
   recreatedFrom: null,
+  selectAnchor: null,
   upload: null,
   activePreset: {},
   toasts: [],
@@ -96,8 +111,21 @@ export const useStore = create<State>((set, get) => ({
   patchDraft: patch => set(s => ({ draft: { ...s.draft, ...patch } })),
   setDraft: draft => set({ draft }),
   set: patch => set(patch as Partial<State>),
-  toggleSelect: id => set(s => ({ selected: s.selected.includes(id) ? s.selected.filter(x => x !== id) : [...s.selected, id] })),
-  clearSelection: () => set({ selected: [], selecting: false }),
+  toggleSelect: id => set(s => ({ selected: s.selected.includes(id) ? s.selected.filter(x => x !== id) : [...s.selected, id], selectAnchor: id })),
+  selectRangeTo: id => set(s => {
+    const from = s.selectAnchor ? gridOrder.indexOf(s.selectAnchor) : -1;
+    const to = gridOrder.indexOf(id);
+    if (from < 0 || to < 0) return { selected: s.selected.includes(id) ? s.selected : [...s.selected, id], selectAnchor: id };
+    const range = gridOrder.slice(Math.min(from, to), Math.max(from, to) + 1);
+    return { selected: [...s.selected, ...range.filter(x => !s.selected.includes(x))], selectAnchor: id };
+  }),
+  fillRange: () => set(s => {
+    const positions = s.selected.map(id => gridOrder.indexOf(id)).filter(i => i >= 0);
+    if (positions.length < 2) return {};
+    const range = gridOrder.slice(Math.min(...positions), Math.max(...positions) + 1);
+    return { selected: [...s.selected, ...range.filter(x => !s.selected.includes(x))] };
+  }),
+  clearSelection: () => set({ selected: [], selecting: false, selectAnchor: null }),
   toast: (text, tone) => {
     const id = ++toastId;
     set(s => ({ toasts: [...s.toasts, { id, text, tone }] }));

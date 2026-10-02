@@ -7,9 +7,9 @@ import { api } from '../lib/api';
 import { assetToRef, assetsToEnvironments, createFolder, deleteAssets, dismissGeneration, moveAssets, recreate, retryGeneration, saveAsset } from '../lib/actions';
 import { formatCost } from '../lib/models';
 import { invalidateGallery, keys, queryClient, useActive, useAssets, useFolders } from '../lib/queries';
-import { errorText, useStore } from '../lib/store';
+import { errorText, rangeGap, setGridOrder, useStore } from '../lib/store';
 import type { Asset, Folder, Generation } from '../lib/types';
-import { Button, Empty, IconButton, Popover, Segmented, Spinner, useLongPress } from './ui';
+import { Button, Empty, IconButton, Popover, Segmented, Spinner, useIsMobile, useLongPress } from './ui';
 import { MoveMenu } from './MoveMenu';
 
 const DRAG_TYPE = 'application/x-studio-assets';
@@ -101,7 +101,7 @@ function VideoBadge({ asset }: { asset: Asset }) {
 }
 
 function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
-  const { selecting, selected, toggleSelect, set } = useStore();
+  const { selecting, selected, toggleSelect, selectRangeTo, set } = useStore();
   // Desktop: hovering a video card plays a silent preview.
   const [hoverPlay, setHoverPlay] = useState(false);
   const canHover = asset.kind === 'video' && window.matchMedia('(hover: hover)').matches;
@@ -112,7 +112,9 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
     if (fired.current) { fired.current = false; return; }
     if (selecting || e.shiftKey || e.metaKey || e.ctrlKey) {
       if (!selecting) set({ selecting: true });
-      toggleSelect(asset.id);
+      // Shift+click: everything between the last clicked result and this one.
+      if (e.shiftKey) { e.preventDefault(); selectRangeTo(asset.id); }
+      else toggleSelect(asset.id);
     } else onOpen();
   }
 
@@ -227,6 +229,7 @@ function AssetGrid({ folder, kind, showActive, emptyText }: { folder: string; ki
     const results = items.map((a, index) => ({ at: Date.parse(a.createdAt), card: null as Generation | null, asset: a, index }));
     return [...cards, ...results].sort((x, y) => y.at - x.at);
   }, [items, activeHere, showActiveCards, query.hasNextPage]);
+  useEffect(() => { setGridOrder(entries.filter(e => e.asset).map(e => e.asset!.id)); }, [entries]);
 
   if (query.isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (query.isError) return <Empty title="Could not load" icon={<AlertTriangle className="size-8" />}>{errorText(query.error)}</Empty>;
@@ -376,7 +379,8 @@ export function FolderSidebar() {
 // ---------------------------------------------------------------- selection
 
 function SelectionBar() {
-  const { selected, selecting, clearSelection, set, workspaceId, view, folder, kind, toast } = useStore();
+  const { selected, selecting, clearSelection, set, workspaceId, view, folder, kind, toast, fillRange } = useStore();
+  const mobile = useIsMobile();
   const [allIds, setAllIds] = useState<string[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -411,12 +415,16 @@ function SelectionBar() {
   }
 
   return (
-    <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur-xl md:bottom-4 md:left-1/2 md:right-auto md:w-auto md:-translate-x-1/2 md:rounded-2xl md:border md:pb-0 md:shadow-2xl">
-      <div className="flex h-16 items-center gap-2 px-3">
+    <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur-xl md:sticky md:top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)] md:z-20 md:mb-3 md:rounded-2xl md:border md:bg-panel-2 md:pb-0 md:shadow-xl md:backdrop-blur-none">
+      <div className="no-scrollbar flex h-16 items-center gap-2 overflow-x-auto px-3 md:overflow-visible">
         <IconButton label="Cancel selection" onClick={clearSelection}><X className="size-5" /></IconButton>
         <span className="min-w-20 text-sm font-medium">{selected.length} selected</span>
         <Button variant="ghost" loading={loadingAll} onClick={selectAll}>{allSelected ? 'Clear' : 'Select all'}</Button>
-        <MoveMenu side="top" align="left" disabled={!selected.length} busy={moving} targets={[
+        {rangeGap(selected) && (
+          <Button variant="ghost" onClick={fillRange} title="Select everything between the first and last selected (desktop: Shift+click)">Range</Button>
+        )}
+        <span className="hidden flex-1 text-xs text-faint lg:block">Shift+click selects a range</span>
+        <MoveMenu side={mobile ? 'top' : 'bottom'} align={mobile ? 'left' : 'right'} disabled={!selected.length} busy={moving} targets={[
           { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: selected } }) },
           { key: 'model', label: 'Model refs', icon: <Star className="size-4" />, hint: 'Photos only; results stay in your timeline', onSelect: () => toLibrary('model') },
           { key: 'environments', label: 'Environments', icon: <MapPin className="size-4" />, hint: 'Photos only; shared by all your workspaces', onSelect: () => toLibrary('environments') },
@@ -476,10 +484,10 @@ export function Gallery() {
         </div>
       </div>
 
+      <SelectionBar />
       {view === 'timeline' && <AssetGrid folder="all" kind={kind} emptyText="Write a prompt below and hit Generate. Everything you create shows up here." />}
       {view === 'folders' && !folder && <FolderGrid />}
       {openFolder && <AssetGrid folder={folder} kind={kind} emptyText="Pick this folder in the create box, or move results here." />}
-      <SelectionBar />
     </div>
   );
 }
