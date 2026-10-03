@@ -21,7 +21,7 @@ const ID = 'higgsfield';
  * Higgsfield's catalog says nothing about content policy, so models known to be uncensored are listed
  * here. Users can mark others themselves (Settings → Auto models).
  */
-const UNCENSORED = new Set(['seedream_v4_5']);
+const UNCENSORED = /^(seedream_v4_5$|wan)/; // every Wan model on Higgsfield is uncensored
 
 /**
  * Models that take Higgsfield Elements (reusable characters/props stored in the user's Higgsfield account),
@@ -247,7 +247,7 @@ export function normalizeHiggsfieldModel(item: any): ModelInfo {
     vendor: item.provider_name || undefined,
     modality,
     description: item.description || undefined,
-    mature: UNCENSORED.has(item.id) ? true : undefined,
+    mature: UNCENSORED.test(item.id) ? true : undefined,
     promptField: 'prompt',
     fields,
     refFields,
