@@ -203,6 +203,20 @@ async function waitFor(ctx: ToolContext, ids: string[], seconds: number) {
   }
 }
 
+/** get_results without file details: enough for scripts to track ids and statuses. */
+const compact = (list: Awaited<ReturnType<typeof results>>) =>
+  list.map(g => ({ id: g.id, status: g.status, ...('error' in g && g.error ? { error: g.error } : {}), assetIds: g.assets.map(a => a.id) }));
+
+/** Runs for the same idempotency key one after another, so two concurrent retries can't both start a job. */
+const keyLocks = new Map<string, Promise<unknown>>();
+async function once(key: string | null, run: () => Promise<void>) {
+  if (!key) return run();
+  const previous = keyLocks.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(run);
+  keyLocks.set(key, current);
+  try { await current; } finally { if (keyLocks.get(key) === current) keyLocks.delete(key); }
+}
+
 const WAIT = { type: 'number', description: 'Seconds to wait for the results before answering (0–300). Call get_results again to keep waiting.' };
 
 // ---------------------------------------------------------------- the tools
@@ -407,30 +421,67 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'generate',
-    description: 'Generate images or videos. Results appear in the studio; get them with get_results (or wait here). Costs money: check with quote when unsure.',
+    description: 'Generate images or videos. Results appear in the studio; get them with get_results (or wait here). Costs money: check with quote when unsure. Send an idempotency_key so a retry after a timeout or crash can never pay twice; pass prompts (a list) to start several in one call.',
     perm: 'generate',
     properties: {
       ...generateProps(), wait_seconds: WAIT,
+      prompts: { type: 'array', items: { type: 'string' }, description: 'Several prompts (up to 20) with the same model, settings, references and folder, started in one call (each gets "batch" items). Use instead of prompt.' },
+      idempotency_key: { type: 'string', description: 'Your own unique id for this request (e.g. a UUID). Repeating the call with the same key returns the generations it already started (deduplicated: true) instead of starting and paying for new ones. Remembered for 7 days.' },
+      response: { type: 'string', enum: ['full', 'ids'], description: '"ids": only generation ids and statuses (compact). Default "full" includes results.' },
       original_prompt: { type: 'string', description: 'When prompt came from enhance_prompt: the short prompt it was rewritten from (shown in the studio as the original).' },
       enhance: { type: 'boolean', description: 'Rewrite the prompt with the prompt assistant as the first step of the job, without review (status "enhancing" until done). About 1–2 cents of OpenRouter credit per batch.' },
     },
     run: async (ctx, args) => {
-      const { input } = await buildInput(ctx, args, false);
-      if (typeof args.original_prompt === 'string' && args.original_prompt.trim()) input.originalPrompt = args.original_prompt;
-      if (args.enhance === true) input.enhance = true;
-      const rows = await createGenerations(ctx.userId, input, ctx.agent.id);
+      const prompts: string[] | null = Array.isArray(args.prompts) && args.prompts.length ? args.prompts.map((p: unknown) => String(p ?? '')) : null;
+      if (prompts && prompts.length > 20) bad('Up to 20 prompts per call.');
+      const key = typeof args.idempotency_key === 'string' && args.idempotency_key.trim() ? args.idempotency_key.trim().slice(0, 200) : null;
+      const list = prompts ?? [args.prompt];
+      const ids: string[] = [];
+      let reused = 0;
+      for (let i = 0; i < list.length; i++) {
+        // With several prompts each gets its own key, so a retry only starts the ones that are missing.
+        const clientKey = key ? (prompts ? `${key}#${i + 1}` : key) : null;
+        try {
+          await once(clientKey ? `${ctx.agent.id}:${clientKey}` : null, async () => {
+            if (clientKey) {
+              const existing = await q<{ id: string }>(
+                `select id from generations where api_token_id = $1 and client_key = $2 and created_at > now() - interval '7 days' order by created_at`,
+                [ctx.agent.id, clientKey]);
+              if (existing.length) { ids.push(...existing.map(r => r.id)); reused += existing.length; return; }
+            }
+            const { input } = await buildInput(ctx, { ...args, prompt: list[i] }, false);
+            if (!prompts && typeof args.original_prompt === 'string' && args.original_prompt.trim()) input.originalPrompt = args.original_prompt;
+            if (args.enhance === true) input.enhance = true;
+            const rows = await createGenerations(ctx.userId, input, ctx.agent.id, clientKey);
+            ids.push(...rows.map(r => r.id));
+          });
+        } catch (error: any) {
+          if (!ids.length) throw error;
+          // Some prompts already started: say which, so nothing is lost (a retry with the same key won't repeat them).
+          notifyChange(ctx.userId);
+          bad(`Prompt ${i + 1} failed: ${error.message} Already started: ${ids.join(', ')}.`);
+        }
+      }
       notifyChange(ctx.userId);
-      const ids = rows.map(r => r.id);
       const wait = clampWait(args.wait_seconds);
-      return { generationIds: ids, results: wait ? await waitFor(ctx, ids, wait) : await results(ctx, ids) };
+      const out = wait ? await waitFor(ctx, ids, wait) : await results(ctx, ids);
+      return args.response === 'ids'
+        ? { generationIds: ids, deduplicated: reused > 0, statuses: compact(out) }
+        : { generationIds: ids, deduplicated: reused > 0, results: out };
     },
   },
   {
     name: 'get_results',
     description: 'Status and files of generations. Each file has a url (original) and cleanUrl (metadata stripped); download them with the same Authorization header.',
-    properties: { generationIds: { type: 'array', items: { type: 'string' } }, wait_seconds: WAIT },
+    properties: {
+      generationIds: { type: 'array', items: { type: 'string' } }, wait_seconds: WAIT,
+      response: { type: 'string', enum: ['full', 'ids'], description: '"ids": only id, status, error and result ids per generation.' },
+    },
     required: ['generationIds'],
-    run: async (ctx, args) => waitFor(ctx, uuids(args.generationIds), clampWait(args.wait_seconds)),
+    run: async (ctx, args) => {
+      const out = await waitFor(ctx, uuids(args.generationIds), clampWait(args.wait_seconds));
+      return args.response === 'ids' ? compact(out) : out;
+    },
   },
   {
     name: 'list_results',
@@ -440,7 +491,9 @@ export const TOOLS: Tool[] = [
       folder: { type: 'string', description: 'Folder name or id, "unsorted", or omit for all.' },
       kind: { type: 'string', enum: ['image', 'video'] },
       limit: { type: 'number', description: 'Up to 100 (default 30).' },
-      before: { type: 'string', description: 'createdAt of the last item seen, for the next page.' },
+      before: { type: 'string', description: 'createdAt of the last item seen, for the next page (or any ISO time).' },
+      created_after: { type: 'string', description: 'Only results created at or after this ISO time.' },
+      model: { type: 'string', description: 'Only results whose model name contains this.' },
     },
     run: async (ctx, args) => {
       const ws = await workspace(ctx, args.workspace);
@@ -452,6 +505,8 @@ export const TOOLS: Tool[] = [
       }
       if (args.kind === 'image' || args.kind === 'video') { params.push(args.kind); where += ` and a.kind = $${params.length}`; }
       if (args.before) { params.push(String(args.before)); where += ` and a.created_at < $${params.length}::timestamptz`; }
+      if (args.created_after) { params.push(String(args.created_after)); where += ` and a.created_at >= $${params.length}::timestamptz`; }
+      if (args.model) { params.push(`%${String(args.model).replace(/[%_]/g, '')}%`); where += ` and g.model_name ilike $${params.length}`; }
       const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 100);
       const rows = await q(
         `select a.*, g.prompt, g.model_name, f.name as folder_name from assets a join generations g on g.id = a.generation_id
@@ -459,6 +514,48 @@ export const TOOLS: Tool[] = [
       return rows.map(a => ({
         ...assetOut(ctx, a), generationId: a.generation_id, model: a.model_name, prompt: String(a.prompt || '').slice(0, 300),
         folder: a.folder_name || 'Unsorted', createdAt: a.created_at,
+      }));
+    },
+  },
+  {
+    name: 'list_generations',
+    description: 'Find generations (jobs) again, including ones still running or failed, e.g. after losing their ids in a crash. Newest first, compact. Then poll with get_results.',
+    properties: {
+      workspace: WORKSPACE,
+      folder: { type: 'string', description: 'Folder name or id, or "unsorted".' },
+      status: { type: 'string', enum: ['active', 'succeeded', 'failed'], description: '"active": not finished yet (enhancing, pending, queued, running, saving).' },
+      model: { type: 'string', description: 'Only models whose name contains this.' },
+      created_after: { type: 'string', description: 'ISO time.' },
+      created_before: { type: 'string', description: 'ISO time.' },
+      mine: { type: 'boolean', description: 'Only generations started with this agent key.' },
+      limit: { type: 'number', description: 'Up to 200 (default 50).' },
+      offset: { type: 'number' },
+    },
+    run: async (ctx, args) => {
+      const ws = await workspace(ctx, args.workspace);
+      const params: unknown[] = [ws.id];
+      let where = 'g.workspace_id = $1';
+      const add = (sql: string, value: unknown) => { params.push(value); where += ` and ${sql.replace('?', `$${params.length}`)}`; };
+      if (args.folder !== undefined && args.folder !== null && args.folder !== '') {
+        const folderId = await resolveFolder(ctx, ws.id, args.folder, false);
+        if (folderId) add('g.folder_id = ?', folderId); else where += ' and g.folder_id is null';
+      }
+      if (args.status === 'active') add('g.status = any(?)', ACTIVE);
+      else if (args.status === 'succeeded' || args.status === 'failed') add('g.status = ?', args.status);
+      if (args.model) add('g.model_name ilike ?', `%${String(args.model).replace(/[%_]/g, '')}%`);
+      if (args.created_after) add('g.created_at >= ?::timestamptz', String(args.created_after));
+      if (args.created_before) add('g.created_at < ?::timestamptz', String(args.created_before));
+      if (args.mine === true) add('g.api_token_id = ?', ctx.agent.id);
+      const limit = Math.min(Math.max(Math.round(Number(args.limit) || 50), 1), 200);
+      const offset = Math.max(Math.round(Number(args.offset) || 0), 0);
+      const rows = await q(
+        `select g.id, g.status, g.error, g.model_name, g.prompt, g.created_at, f.name as folder_name,
+                coalesce((select array_agg(a.id order by a.idx) from assets a where a.generation_id = g.id), '{}') as asset_ids
+           from generations g left join folders f on f.id = g.folder_id
+          where ${where} order by g.created_at desc limit ${limit} offset ${offset}`, params);
+      return rows.map(g => ({
+        id: g.id, status: g.status, ...(g.error ? { error: g.error } : {}), model: g.model_name,
+        folder: g.folder_name || 'Unsorted', createdAt: g.created_at, prompt: String(g.prompt || '').slice(0, 120), assetIds: g.asset_ids,
       }));
     },
   },
@@ -545,5 +642,6 @@ function generateProps(): Record<string, unknown> {
 
 export const INSTRUCTIONS = `Spicy Studio: generate AI images and videos into the user's studio.
 Typical flow: list_workspaces → list_models (prefer "Auto" models: cheapest provider, uncensored and regular kept apart) → get_model for its settings → generate (with folder, references by name, @Element mentions in the prompt) → get_results with wait_seconds until status is "succeeded" → download a file's url or cleanUrl (metadata stripped) with this same Authorization header, or save_results to put them in the user's save location.
+Always send generate an idempotency_key (e.g. a UUID per request) so a retry can't pay twice; list_generations finds lost jobs again.
 Optional: enhance_prompt rewrites a short prompt into a detailed one for the chosen model (keeps @ tokens); then pass both to generate (prompt + original_prompt).
 Generations cost real money: use quote when unsure, and don't retry failures in a loop.`;

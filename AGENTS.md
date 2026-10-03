@@ -197,6 +197,10 @@ stored, shown once, `last4` for display). `registerAuth` accepts bearer tokens *
 Each key (`api_tokens`) has `perms` (`generate`, `folders`, `upload`, `presets`, `save`, `delete`; listing is
 always allowed) and an optional `workspace_ids` allowlist. Tools check `requirePerm` and scope every lookup
 through `allowed()`/`workspaces()` plus the usual ownership guards; foreign or disallowed ids are "not found".
+`generate` takes `idempotency_key` (stored as `generations.client_key`, scoped to the API token, 7 days; with `prompts` each
+prompt gets `key#n`; concurrent calls with one key are serialised in-process by `once()`), `prompts` (up to 20 in one call;
+a failure names what already started) and `response: "ids"`. `list_generations` finds jobs by folder/status/model/time/
+`mine` for recovery after a client crash.
 `list_references` lists `model` / `uploads` / `environments` separately (same filters as the studio's tabs; `generated` on
 request), with paging and a `url` per item (`GET /api/agent/refs/:id`). Reference names repeat (refs made from results are
 named after model + date), so a name matching several references is refused with their ids; agents should pass ids.
