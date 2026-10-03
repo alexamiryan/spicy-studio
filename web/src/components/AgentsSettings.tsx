@@ -80,6 +80,37 @@ function Access({ perms, workspaceIds, onChange }: {
   );
 }
 
+/**
+ * Instructions to paste into an agent's chat so it connects itself (Hermes can add MCP servers to its own
+ * config). With a key it's ready to use; without one it has a placeholder for keys created earlier.
+ */
+function agentPrompt(url: string, token: string | null, workspaces?: string[] | null, perms?: Perm[]) {
+  const key = token || '<paste the agent key here>';
+  const scope = perms === undefined
+    ? "The key's workspaces and permissions are set in Spicy Studio; a tool this key may not use says so."
+    : workspaces ? `This key can only use the workspace${workspaces.length === 1 ? '' : 's'} ${workspaces.map(w => `"${w}"`).join(', ')}.` : 'This key can use all my workspaces.';
+  const allowed = perms?.length ? `It's allowed to: ${perms.map(p => PERM_LABELS[p].label.toLowerCase()).join(', ')}.` : '';
+  return `Connect to my Spicy Studio and use it for all image and video generation from now on (instead of generating with Higgsfield directly).
+
+Spicy Studio is an MCP server (Streamable HTTP):
+- URL: ${url}
+- Auth header: Authorization: Bearer ${key}
+
+1. Add it as an MCP server named "spicy-studio". For Hermes, add this to mcp_servers in ~/.hermes/config.yaml, then reload your MCP tools (or restart):
+
+${hermesSnippet(url, key)}
+
+2. Check the connection: call list_workspaces and list_models, and tell me what you see.
+
+How to use it:
+- ${[scope, allowed].filter(Boolean).join(' ')}
+- Prefer "Auto" models from list_models: they go to the cheapest provider with enough balance. Uncensored and regular versions are separate Auto models; pick the one the task needs. Use get_model to see a model's settings and reference inputs.
+- generate takes names or ids: workspace, model, references (reference or environment photo names, or result ids), folder (created if missing), preset. Mention elements as @Name in the prompt.
+- Then call get_results with wait_seconds until status is "succeeded". Download a file's cleanUrl (metadata removed) or url with the same Authorization header, or call save_results to save it to my NAS.
+- Generations cost real money: call quote when unsure, and never retry failures in a loop; tell me instead.
+- Keep the key secret: don't print it, post it, or store it anywhere except your MCP config.`;
+}
+
 const hermesSnippet = (url: string, token: string) =>
   `mcp_servers:\n  spicy-studio:\n    url: "${url}"\n    headers:\n      Authorization: "Bearer ${token}"\n    timeout: 360`;
 
@@ -88,7 +119,9 @@ export function AgentsSettings() {
   const toast = useStore(s => s.toast);
   const { data, isLoading } = useQuery({ queryKey: KEY, queryFn: () => api.get<AgentsInfo>('/api/agents') });
   const [form, setForm] = useState<{ name: string; perms: Perm[]; workspaceIds: string[] | null } | null>(null);
-  const [created, setCreated] = useState<{ name: string; token: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; token: string; perms: Perm[]; workspaceIds: string[] | null } | null>(null);
+  const { data: workspaces = [] } = useWorkspaces();
+  const wsNames = (ids: string[] | null) => (ids ? workspaces.filter(w => ids.includes(w.id)).map(w => w.name) : null);
   const [busy, setBusy] = useState(false);
 
   async function create(e: React.FormEvent) {
@@ -97,7 +130,7 @@ export function AgentsSettings() {
     setBusy(true);
     try {
       const result = await api.post<{ token: string; agent: AgentKey }>('/api/agents', form);
-      setCreated({ name: result.agent.name, token: result.token });
+      setCreated({ name: result.agent.name, token: result.token, perms: result.agent.perms, workspaceIds: result.agent.workspaceIds });
       setForm(null);
       queryClient.invalidateQueries({ queryKey: KEY });
     } catch (error) { toast(errorText(error), 'error'); }
@@ -129,6 +162,13 @@ export function AgentsSettings() {
         <Field label="MCP server URL" hint="Streamable HTTP. Use your server's LAN address or Tailscale name if this shows localhost.">
           <CopyBox text={data.mcpUrl} />
         </Field>
+        <details className="group">
+          <summary className="cursor-pointer select-none text-sm font-medium text-muted hover:text-fg">Prompt for an agent with an existing key</summary>
+          <div className="mt-2 space-y-1">
+            <CopyBox text={agentPrompt(data.mcpUrl, null)} rows={8} />
+            <p className="text-xs text-faint">Replace the key placeholder before pasting. New keys come with a ready prompt that includes the key.</p>
+          </div>
+        </details>
       </div>
 
       {created && (
@@ -136,6 +176,9 @@ export function AgentsSettings() {
           <div className="text-sm font-medium">Key for "{created.name}"</div>
           <p className="text-xs text-muted">Copy it now: it's shown only once. Anyone with this key can act as you within its permissions.</p>
           <CopyBox text={created.token} />
+          <Field label="Prompt for your agent" hint="Paste it into the agent's chat: it adds the server to its config and checks the connection. Includes the key.">
+            <CopyBox text={agentPrompt(data.mcpUrl, created.token, wsNames(created.workspaceIds), created.perms)} rows={8} />
+          </Field>
           <Field label="Hermes config (config.yaml)" hint="Other MCP clients: the same URL with the header Authorization: Bearer <key>.">
             <CopyBox text={hermesSnippet(data.mcpUrl, created.token)} rows={6} />
           </Field>
