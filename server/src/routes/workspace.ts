@@ -82,6 +82,7 @@ export function workspaceRoutes(app: FastifyInstance) {
     const imageDir = body.imageExportDir !== undefined ? sanitizeRelativeDir(body.imageExportDir) : current.image_export_dir;
     const videoDir = body.videoExportDir !== undefined ? sanitizeRelativeDir(body.videoExportDir) : current.video_export_dir;
     const prefs = body.prefs && typeof body.prefs === 'object' ? { ...current.prefs, ...body.prefs } : current.prefs;
+    if (prefs.assistRules !== undefined) prefs.assistRules = String(prefs.assistRules ?? '').slice(0, 4000);
     const row = await one(
       'update workspaces set name = $2, image_export_dir = $3, video_export_dir = $4, prefs = $5 where id = $1 returning *',
       [id, name, imageDir, videoDir, JSON.stringify(prefs)]);

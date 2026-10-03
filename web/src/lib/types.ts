@@ -54,7 +54,7 @@ export interface Workspace {
   name: string;
   imageExportDir: string;
   videoExportDir: string;
-  prefs: { folderId?: string | null; imageModel?: string; videoModel?: string };
+  prefs: { folderId?: string | null; imageModel?: string; videoModel?: string; /** Prompt assistant preferences for this workspace. */ assistRules?: string };
   createdAt: string;
 }
 

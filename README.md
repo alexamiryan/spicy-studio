@@ -52,7 +52,7 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
   [OpenRouter](https://openrouter.ai) (Grok 4.7 by default) rewrites it into a detailed prompt for the selected model and its
   settings, keeping every `@image`/`@element` link and its role (checked, with one automatic retry). Review it, use it,
   or go back to your words (kept with the generation for Recreate). Optional: let it see your references; standing
-  preferences in Settings → Prompt assistant.
+  preferences in Settings → Prompt assistant, plus per-workspace ones (e.g. an influencer's look) in Workspace settings.
 - **Trim** (videos, `T`): drag the start and end, preview the selection on a loop, and save it as a new result
   next to the original (frame-accurate; the original stays).
 - **Save** copies a result into the workspace's folder on your save location: an **SMB share**

@@ -60,6 +60,13 @@ describe('what the assistant is told', () => {
     expect(table).toContain('- @Mia: element with 3 photos — red dress');
   });
 
+  it('adds the workspace preferences after the general ones', () => {
+    const msg = userMessage({ target: 'X (image)', refs: [], elements: [], houseRules: 'Amateur iPhone look.', workspaceRules: 'Ani: freckles, no makeup.', workspaceName: 'Ani Torosyan', prompt: 'p', withImages: false });
+    expect(msg.indexOf('Amateur iPhone look.')).toBeLessThan(msg.indexOf('Ani: freckles'));
+    expect(msg).toContain('Preferences for this workspace ("Ani Torosyan") (they override');
+    expect(userMessage({ target: 'X', refs: [], elements: [], workspaceRules: '  ', prompt: 'p', withImages: false })).not.toContain('this workspace');
+  });
+
   it('includes house rules and the prompt', () => {
     const msg = userMessage({ target: 'X (image)', refs: [], elements: [], houseRules: 'No talking. No music.', prompt: ' girl at home ', withImages: false });
     expect(msg).toContain('standing preferences');

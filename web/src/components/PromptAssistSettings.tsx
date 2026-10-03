@@ -66,7 +66,7 @@ export function PromptAssistSettings() {
         <Field label="Model" hint="Grok rewrites explicit prompts without watering them down. Models marked with the eye can look at references.">
           <ModelChooser value={data.model} onChange={model => save({ model })} />
         </Field>
-        <Field label="Your standing preferences" hint="Added to every rewrite unless the prompt says otherwise, e.g. 'Amateur iPhone look, low-light noise. Videos: no talking, no music.'">
+        <Field label="Your standing preferences" hint="Added to every rewrite unless the prompt says otherwise, e.g. 'Amateur iPhone look, low-light noise. Videos: no talking, no music.' Each workspace can add its own in Workspace settings.">
           <textarea className={clsx(inputClass, 'h-auto min-h-24 py-2.5 leading-relaxed')} rows={4} maxLength={4000}
             value={rules ?? data.houseRules} onChange={e => setRules(e.target.value)}
             onBlur={() => { if (rules !== null && rules !== data.houseRules) save({ houseRules: rules }); }} />

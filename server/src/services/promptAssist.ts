@@ -113,7 +113,7 @@ export interface EnhanceInput {
  * otherwise the rewrite comes back with warnings instead of silently breaking references.
  */
 export async function enhancePrompt(userId: string, model: ModelInfo, input: EnhanceInput) {
-  await ownWorkspace(userId, input.workspaceId);
+  const workspace = await ownWorkspace(userId, input.workspaceId);
   const prompt = String(input.prompt || '').slice(0, 20000);
   if (!prompt.trim()) throw new ProviderError('Write what you want first; the assistant rewrites it.', 400);
   const settings = await assistSettings(userId);
@@ -144,7 +144,10 @@ export async function enhancePrompt(userId: string, model: ModelInfo, input: Enh
   const elements: (ElementInfo & { files: string[] })[] = elementRows.map(e => ({ name: e.name, description: e.description || '', photos: e.files.length, files: e.files }));
 
   const withImages = input.showRefs ?? settings.showRefs;
-  const text = userMessage({ target: describeTarget(model, input.settings || {}), refs, elements, houseRules: settings.houseRules, prompt, withImages });
+  const text = userMessage({
+    target: describeTarget(model, input.settings || {}), refs, elements, prompt, withImages,
+    houseRules: settings.houseRules, workspaceRules: String(workspace.prefs?.assistRules || ''), workspaceName: workspace.name,
+  });
   const content: any[] = [{ type: 'text', text }];
   if (withImages) {
     const shown: { label: string; file: string }[] = [

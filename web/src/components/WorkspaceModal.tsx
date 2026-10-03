@@ -17,6 +17,7 @@ export function WorkspaceModal() {
   const [name, setName] = useState('');
   const [imageDir, setImageDir] = useState('');
   const [videoDir, setVideoDir] = useState('');
+  const [assistRules, setAssistRules] = useState('');
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -25,6 +26,7 @@ export function WorkspaceModal() {
     setName(existing?.name || '');
     setImageDir(existing?.imageExportDir || '');
     setVideoDir(existing?.videoExportDir || '');
+    setAssistRules(existing?.prefs.assistRules || '');
     setTouched(Boolean(existing));
   }, [open, existing?.id]);
 
@@ -39,8 +41,10 @@ export function WorkspaceModal() {
     e.preventDefault();
     setBusy(true);
     try {
-      const body = { name, imageExportDir: imageDir, videoExportDir: videoDir };
+      const body = { name, imageExportDir: imageDir, videoExportDir: videoDir, prefs: { assistRules } };
       const ws = existing ? await api.patch<Workspace>(`/api/workspaces/${existing.id}`, body) : await api.post<Workspace>('/api/workspaces', body);
+      // Creating takes only name and folders; preferences go on with a follow-up update.
+      if (!existing && assistRules.trim()) await api.patch(`/api/workspaces/${ws.id}`, { prefs: { assistRules } });
       await queryClient.invalidateQueries({ queryKey: keys.workspaces });
       if (!existing) setWorkspace(ws.id);
       set({ modal: null });
@@ -68,6 +72,10 @@ export function WorkspaceModal() {
         </Field>
         <Field label="Video save folder" hint={<>Saved to <span className="break-all text-muted">{where(videoDir)}</span></>}>
           <input className={inputClass} value={videoDir} onChange={e => { setTouched(true); setVideoDir(e.target.value); }} required />
+        </Field>
+        <Field label="Prompt assistant preferences" hint="Added to your general preferences (Settings → Prompt assistant) when ✨ rewrites prompts in this workspace, and win where they disagree. E.g. her look, style, usual places.">
+          <textarea className={`${inputClass} h-auto min-h-20 py-2.5 leading-relaxed`} rows={3} maxLength={4000} value={assistRules}
+            onChange={e => setAssistRules(e.target.value)} placeholder="e.g. Freckles, no makeup, always natural light. Her apartment has a beige sofa." />
         </Field>
         <div className="flex items-center gap-2 pt-2">
           {existing && workspaces.length > 1 && <Button type="button" variant="danger" onClick={remove}>Delete</Button>}

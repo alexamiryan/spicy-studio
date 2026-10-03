@@ -47,7 +47,10 @@ export function tokenTable(refs: RefInfo[], elements: ElementInfo[]) {
   return lines.length ? lines.join('\n') : '- none';
 }
 
-export function userMessage(opts: { target: string; refs: RefInfo[]; elements: ElementInfo[]; houseRules?: string; prompt: string; withImages: boolean }) {
+export function userMessage(opts: {
+  target: string; refs: RefInfo[]; elements: ElementInfo[]; houseRules?: string; workspaceRules?: string; workspaceName?: string;
+  prompt: string; withImages: boolean;
+}) {
   return [
     `Target model: ${opts.target}`,
     '',
@@ -55,6 +58,11 @@ export function userMessage(opts: { target: string; refs: RefInfo[]; elements: E
     tokenTable(opts.refs, opts.elements),
     ...(opts.withImages ? ['', 'The attached images are those references, each labelled with its token.'] : []),
     ...(opts.houseRules?.trim() ? ['', 'The user\'s standing preferences (apply them unless this prompt says otherwise):', opts.houseRules.trim()] : []),
+    // Workspace preferences (e.g. one influencer's look) come after the general ones and win where they disagree.
+    ...(opts.workspaceRules?.trim() ? [
+      '', `Preferences for this workspace${opts.workspaceName ? ` ("${opts.workspaceName}")` : ''} (they override the ones above where they disagree):`,
+      opts.workspaceRules.trim(),
+    ] : []),
     '',
     'Prompt to rewrite:',
     '"""',

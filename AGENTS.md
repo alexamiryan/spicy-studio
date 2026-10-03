@@ -205,7 +205,8 @@ stack with the SDK `Client` (Mock providers only).
 
 `services/promptAssist.ts` + `routes/assist.ts`: rewrites a prompt through OpenRouter (`/chat/completions`, default
 `x-ai/grok-4.7`). Key (encrypted) and preferences (`model`, `houseRules`, `showRefs`) live in `provider_settings` under
-`openrouter`. The pure parts are in `services/promptRewrite.ts`: the system prompt, `describeTarget` (model + settings),
+`openrouter`; each workspace can add its own preferences (`workspaces.prefs.assistRules`, edited in Workspace settings),
+sent after the general ones and winning where they disagree. The pure parts are in `services/promptRewrite.ts`: the system prompt, `describeTarget` (model + settings),
 `tokenTable` (what each `@` token is; only the primary input — `generations.ts: primaryRefField` — is addressable as
 `@imageN`), `checkTokens` (every original token kept, nothing invented except existing `@imageN`; one retry with the
 problem named, then warnings) and `cleanAnswer`. With `showRefs`, references and up to 3 photos per mentioned element
