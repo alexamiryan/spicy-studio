@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { errorText, useStore } from '../../lib/store';
 import type { ModelInfo } from '../../lib/types';
-import { Button } from '../ui';
+import { Button, Modal, useIsMobile } from '../ui';
 
 export interface AssistInfo { configured: boolean; keyHint: string | null; model: string; houseRules: string; showRefs: boolean }
 export const ASSIST_KEY = ['assist'];
@@ -22,6 +22,7 @@ const shortModel = (id: string) => id.split('/').pop()!.replace(/-/g, ' ').repla
 export function PromptAssist({ model }: { model?: ModelInfo }) {
   const { draft, patchDraft, workspaceId, set, toast } = useStore();
   const { data: assist } = useAssist();
+  const mobile = useIsMobile();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Rewrite | null>(null);
   const [showRefs, setShowRefs] = useState<boolean | null>(null);
@@ -81,28 +82,24 @@ export function PromptAssist({ model }: { model?: ModelInfo }) {
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
       </button>
 
-      {result && (
-        <div className="fade-in absolute bottom-full left-0 right-0 z-40 mb-2 flex max-h-[min(34rem,70dvh)] flex-col rounded-2xl border border-line-strong bg-panel-2 shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-            <Sparkles className="size-4 shrink-0 text-accent" />
-            <div className="min-w-0 flex-1 truncate text-xs text-muted">
-              Rewritten by <span className="text-fg">{shortModel(result.model)}</span>
-              {result.sawImages ? ' · saw your references' : ''}{result.cost ? ` · $${result.cost.toFixed(3)}` : ''}
-            </div>
-            <button onClick={() => setResult(null)} aria-label="Close" className="flex size-7 items-center justify-center rounded-md text-muted hover:bg-white/8 hover:text-fg"><X className="size-4" /></button>
+      {result && (() => {
+        const info = (
+          <span className="min-w-0 truncate text-xs text-muted">
+            Rewritten by <span className="text-fg">{shortModel(result.model)}</span>
+            {result.sawImages ? ' · saw your references' : ''}{result.cost ? ` · $${result.cost.toFixed(3)}` : ''}
+          </span>
+        );
+        const warnings = result.warnings.length > 0 && (
+          <div className="flex gap-2 border-b border-line bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{result.warnings.join(' ')} Check the references before using it, or try again.</span>
           </div>
-          {result.warnings.length > 0 && (
-            <div className="flex gap-2 border-b border-line bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>{result.warnings.join(' ')} Check the references before using it, or try again.</span>
-            </div>
-          )}
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2.5 text-sm leading-relaxed">
-            {highlight(result.prompt)}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
+        );
+        const text = <div className="whitespace-pre-wrap break-words px-3 py-2.5 text-sm leading-relaxed">{highlight(result.prompt)}</div>;
+        const actions = (
+          <div className="flex flex-wrap items-center gap-2">
             {hasRefs && (
-              <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-xs text-muted" title="Send the reference photos to the assistant so it can describe them. They go to OpenRouter and the model's provider.">
+              <label className="mr-auto flex min-h-9 cursor-pointer items-center gap-1.5 text-xs text-muted" title="Send the reference photos to the assistant so it can describe them. They go to OpenRouter and the model's provider.">
                 <input type="checkbox" className="accent-[var(--color-accent)]" checked={seeRefs} onChange={e => setShowRefs(e.target.checked)} />
                 <Images className="size-3.5" />Let it see references
               </label>
@@ -110,8 +107,28 @@ export function PromptAssist({ model }: { model?: ModelInfo }) {
             <Button size="sm" variant="ghost" className="ml-auto" loading={busy} onClick={rewrite}>{!busy && <RotateCcw className="size-3.5" />}Try again</Button>
             <Button size="sm" variant="primary" onClick={use}><Check className="size-3.5" />Use it</Button>
           </div>
-        </div>
-      )}
+        );
+        // Phones: its own sheet. Inside the create sheet (itself scrolling) a popover gets clipped and can't scroll.
+        if (mobile) {
+          return (
+            <Modal open onClose={() => setResult(null)} title={<span className="flex min-w-0 items-center gap-2"><Sparkles className="size-4 shrink-0 text-accent" />{info}</span>} footer={actions}>
+              {warnings}{text}
+            </Modal>
+          );
+        }
+        return (
+          <div className="fade-in absolute bottom-full left-0 right-0 z-40 mb-2 flex max-h-[min(34rem,70dvh)] flex-col rounded-2xl border border-line-strong bg-panel-2 shadow-2xl">
+            <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+              <Sparkles className="size-4 shrink-0 text-accent" />
+              <div className="min-w-0 flex-1 truncate">{info}</div>
+              <button onClick={() => setResult(null)} aria-label="Close" className="flex size-7 items-center justify-center rounded-md text-muted hover:bg-white/8 hover:text-fg"><X className="size-4" /></button>
+            </div>
+            {warnings}
+            <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain">{text}</div>
+            <div className="border-t border-line px-3 py-2">{actions}</div>
+          </div>
+        );
+      })()}
     </>
   );
 }
