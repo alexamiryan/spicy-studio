@@ -10,6 +10,7 @@ import { registerAuth, seedAdmin } from './auth.js';
 import { registerEvents } from './events.js';
 import { mcpRoutes } from './mcp/server.js';
 import { agentRoutes } from './routes/agents.js';
+import { assistRoutes } from './routes/assist.js';
 import { config, mediaDir } from './config.js';
 import { migrate, one, q, waitForDb } from './db.js';
 import { ProviderError } from './providers/types.js';
@@ -73,6 +74,7 @@ presetRoutes(app);
 generationRoutes(app);
 mcpRoutes(app);
 agentRoutes(app);
+assistRoutes(app);
 
 app.get('/healthz', async () => ({ ok: true }));
 app.get('/api/config', async () => ({ exportRoot: config.exportRootLabel }));

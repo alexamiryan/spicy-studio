@@ -38,6 +38,12 @@ export function Info({ generationId }: { generationId: string }) {
           )}
         </div>
         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{g.prompt || <span className="text-faint">No prompt</span>}</p>
+        {g.originalPrompt && (
+          <details className="mt-2 rounded-xl border border-line px-3 py-2">
+            <summary className="cursor-pointer text-xs text-muted">Rewritten by the prompt assistant · your words</summary>
+            <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{g.originalPrompt}</p>
+          </details>
+        )}
       </section>
       {g.refs.length > 0 && (
         <section>

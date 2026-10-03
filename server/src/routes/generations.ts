@@ -62,6 +62,7 @@ export function generationRoutes(app: FastifyInstance) {
         routed: { modelId: dto.modelId, modelName: dto.modelName, settings: dto.settings, refSlots: dto.refSlots },
       } : {}),
       resolvedPrompt: g.resolved_input?.prompt,
+      ...(g.resolved_input?.original ? { originalPrompt: g.resolved_input.original } : {}),
       refs: refs.map(refDto),
       assets: assets.map(assetDto),
       folder,

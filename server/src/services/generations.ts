@@ -22,6 +22,8 @@ export interface GenerateInput {
   refSlots?: Record<string, string[]>;
   folderId?: string | null;
   batch?: number;
+  /** The user's own words when the prompt was rewritten by the prompt assistant (kept for Recreate). */
+  originalPrompt?: string;
 }
 
 function bad(message: string): never { throw new ProviderError(message, 400); }
@@ -195,7 +197,10 @@ export async function createGenerations(userId: string, request: GenerateInput, 
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,$14, clock_timestamp()) returning *`,
         [input.workspaceId, folderId, provider.id, model.model, model.name, model.modality, built.prompt,
           JSON.stringify(built.settings), JSON.stringify(input.refSlots || {}), group, batch,
-          JSON.stringify({ prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto }), randomUUID(), apiTokenId]);
+          JSON.stringify({
+            prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto,
+            ...(request.originalPrompt && request.originalPrompt !== request.prompt ? { original: String(request.originalPrompt).slice(0, 20000) } : {}),
+          }), randomUUID(), apiTokenId]);
       created.push(rows[0]);
     }
     return created;

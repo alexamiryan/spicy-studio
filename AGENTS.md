@@ -201,6 +201,19 @@ served by `GET /api/agent/files/:id[?clean=1]` (stripped on the fly); URLs use `
 Tool calls go around the `/api` change hook, so tools call `notifyChange` themselves. Test against the throwaway
 stack with the SDK `Client` (Mock providers only).
 
+### Prompt assistant
+
+`services/promptAssist.ts` + `routes/assist.ts`: rewrites a prompt through OpenRouter (`/chat/completions`, default
+`x-ai/grok-4.7`). Key (encrypted) and preferences (`model`, `houseRules`, `showRefs`) live in `provider_settings` under
+`openrouter`. The pure parts are in `services/promptRewrite.ts`: the system prompt, `describeTarget` (model + settings),
+`tokenTable` (what each `@` token is; only the primary input — `generations.ts: primaryRefField` — is addressable as
+`@imageN`), `checkTokens` (every original token kept, nothing invented except existing `@imageN`; one retry with the
+problem named, then warnings) and `cleanAnswer`. With `showRefs`, references and up to 3 photos per mentioned element
+are sent as 768 px JPEGs (max 12). The UI (`create/PromptAssist.tsx`) shows the rewrite for review; using it keeps the
+user's words in `draft.promptOriginal`, sent as `originalPrompt` and stored in `resolved_input.original` (detail:
+`originalPrompt`; Recreate restores both). `OPENROUTER_BASE` points at a fake server for tests; never call the real one
+from tests.
+
 ### Presets
 
 `presets` (`routes/presets.ts`) store a create-box state per workspace and modality: model id, prompt,

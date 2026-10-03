@@ -159,6 +159,8 @@ export interface GenerationDetail extends Generation {
   refs: Ref[];
   assets: Asset[];
   folder: { id: string; name: string } | null;
+  /** What the user wrote, when the prompt was rewritten by the prompt assistant. */
+  originalPrompt?: string;
   /** Made by an agent (API key) rather than in the studio. */
   agentName?: string;
 }

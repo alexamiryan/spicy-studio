@@ -11,12 +11,14 @@ export interface Draft {
   refSlots: Record<string, Ref[]>;
   folderId: string | null;
   batch: number;
+  /** The user's own words when the prompt was rewritten by the prompt assistant (null = not rewritten). */
+  promptOriginal?: string | null;
 }
 
 export const emptyDraft = (): Draft => ({ modality: 'image', models: {}, settings: {}, prompt: '', refSlots: {}, folderId: null, batch: 1 });
 
 export type Modal =
-  | { type: 'settings'; tab?: 'general' | 'auto' | 'save' | 'providers' | 'agents' | 'account' | 'users' }
+  | { type: 'settings'; tab?: 'general' | 'auto' | 'save' | 'providers' | 'assist' | 'agents' | 'account' | 'users' }
   | { type: 'library'; tab?: 'refs' | 'environments' | 'elements' }
   | { type: 'workspace'; id?: string }
   | { type: 'refPicker'; fieldKey: string }

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { primaryRefField } from '../../lib/models';
 import { useElements } from '../../lib/queries';
 import { useStore } from '../../lib/store';
+import { PromptAssist } from './PromptAssist';
 import type { ModelInfo } from '../../lib/types';
 
 interface Suggestion { token: string; label: string; thumb?: string | null; hint: string }
@@ -81,13 +82,14 @@ export function PromptInput({ model, onSubmit, rows = 2, autoFocus }: { model?: 
         rows={rows}
         autoFocus={autoFocus}
         value={draft.prompt}
-        onChange={e => { patchDraft({ prompt: e.target.value }); requestAnimationFrame(detect); }}
+        onChange={e => { patchDraft({ prompt: e.target.value, ...(e.target.value.trim() ? {} : { promptOriginal: null }) }); requestAnimationFrame(detect); }}
         onKeyDown={onKeyDown}
         onClick={detect}
         onBlur={() => setTimeout(() => setQuery(null), 150)}
         placeholder={primary ? 'Describe the scene… @ to mention a reference · paste or drop images' : 'Describe what you want to create…'}
-        className="scrollbar-thin block w-full resize-none bg-transparent px-1 py-2 text-[15px] leading-relaxed text-fg outline-none placeholder:text-faint"
+        className="scrollbar-thin block w-full resize-none bg-transparent py-2 pl-1 pr-9 text-[15px] leading-relaxed text-fg outline-none placeholder:text-faint"
       />
+      <PromptAssist model={model} />
       {suggestions.length > 0 && (
         <div ref={list} className="fade-in scrollbar-thin absolute bottom-full left-0 z-40 mb-2 max-h-[min(22rem,50dvh)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl border border-line-strong bg-panel-2 p-1.5 shadow-2xl">
           {suggestions.map((s, i) => (

@@ -35,6 +35,8 @@ services:
       # Optional: base URL agents download results from (default: the address they connected to).
       PUBLIC_URL: ${PUBLIC_URL:-}
       MOCK_PROVIDER: ${MOCK_PROVIDER:-}
+      # Testing only: point the prompt assistant at a fake OpenRouter.
+      OPENROUTER_BASE: ${OPENROUTER_BASE:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${EXPORT_ROOT}:/exports

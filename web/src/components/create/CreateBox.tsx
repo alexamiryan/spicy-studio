@@ -51,6 +51,7 @@ function payload(model: ModelInfo | undefined) {
     workspaceId,
     modelId: model.id,
     prompt: draft.prompt,
+    ...(draft.promptOriginal ? { originalPrompt: draft.promptOriginal } : {}),
     settings: draft.settings[model.id] || {},
     refSlots: Object.fromEntries(model.refFields.map(f => [f.key, (draft.refSlots[f.key] || []).map(r => r.id)])),
     folderId: draft.folderId,

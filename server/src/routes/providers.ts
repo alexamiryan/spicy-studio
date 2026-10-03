@@ -36,6 +36,16 @@ const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
   detail: 'Cheapest provider with enough balance', models,
 });
 
+/** A model by id, Auto models included. */
+export async function modelInfo(userId: string, id: string) {
+  if (id.startsWith(`${AUTO}:`)) {
+    const model = [...await autoModels(userId, 'image'), ...await autoModels(userId, 'video')].find(m => m.id === id);
+    if (!model) throw new ProviderError('This Auto model is not available.', 404);
+    return model;
+  }
+  return (await modelFor(userId, id)).model;
+}
+
 export const favorites = async (userId: string) =>
   (await q<{ model_id: string }>('select model_id from favorite_models where user_id = $1 order by created_at', [userId])).map(r => r.model_id);
 
@@ -157,15 +167,7 @@ export function providerRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.get('/api/model', async request => {
-    const { id } = request.query as { id?: string };
-    if (String(id).startsWith(`${AUTO}:`)) {
-      const model = [...await autoModels(uid(request), 'image'), ...await autoModels(uid(request), 'video')].find(m => m.id === id);
-      if (!model) throw new ProviderError('This Auto model is not available.', 404);
-      return model;
-    }
-    return (await modelFor(uid(request), String(id || ''))).model;
-  });
+  app.get('/api/model', async request => modelInfo(uid(request), String((request.query as { id?: string }).id || '')));
 
   app.put('/api/favorites/models', async request => {
     const userId = uid(request);
