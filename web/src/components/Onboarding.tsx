@@ -139,11 +139,12 @@ export function Onboarding({ userId }: { userId: string }) {
             {current.id === 'providers' && !connected && <Button variant="ghost" onClick={() => go(step + 1)}>Later</Button>}
             {(current.id === 'save' || current.id === 'extras') && <Button variant="ghost" onClick={() => go(step + 1)}>Skip</Button>}
             {current.id === 'workspace' ? (
-              <Button variant="primary" type="submit" form="onboarding-workspace">Continue<ArrowRight className="size-4" /></Button>
+              // A key per step: reusing one <button> would let a click that advances a step finish as this form's submit.
+              <Button key={`next-${current.id}`} variant="primary" type="submit" form="onboarding-workspace">Continue<ArrowRight className="size-4" /></Button>
             ) : current.id === 'done' ? (
-              <Button variant="primary" onClick={finish}>Start creating<ArrowRight className="size-4" /></Button>
+              <Button key={`next-${current.id}`} variant="primary" onClick={finish}>Start creating<ArrowRight className="size-4" /></Button>
             ) : (
-              <Button variant="primary" disabled={current.id === 'providers' && !connected} onClick={() => go(step + 1)}>
+              <Button key={`next-${current.id}`} variant="primary" type="button" disabled={current.id === 'providers' && !connected} onClick={() => go(step + 1)}>
                 {current.id === 'welcome' ? "Let's go" : 'Continue'}<ArrowRight className="size-4" />
               </Button>
             )}
