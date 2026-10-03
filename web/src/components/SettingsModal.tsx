@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Bot, CheckCircle2, Sparkles, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
+import { Bot, CheckCircle2, ExternalLink, Sparkles, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
@@ -24,9 +24,42 @@ const KEY_HINTS: Record<string, { placeholder: string; help?: React.ReactNode }>
   spicyapi: { placeholder: 'Paste API key (sk-spicy-…)' },
   poyo: {
     placeholder: 'Paste your PoYo API key',
-    help: <>Create a key at <a className="text-accent underline-offset-2 hover:underline" href="https://poyo.ai/dashboard/api-key" target="_blank" rel="noreferrer">poyo.ai/dashboard/api-key</a>. Generations are paid with your PoYo credits.</>,
+    help: <>Generations are paid with your PoYo credits.</>,
   },
 };
+
+/** Where to sign up, get a key and add credits, in that order, for people setting a provider up for the first time. */
+const PROVIDER_LINKS: Record<string, { label: string; href: string }[]> = {
+  spicyapi: [
+    { label: 'Create account', href: 'https://spicyapi.ai/register' },
+    { label: 'Get API key', href: 'https://spicyapi.ai/console/keys' },
+    { label: 'Add credits', href: 'https://spicyapi.ai/pricing' },
+  ],
+  higgsfield: [
+    { label: 'Create account', href: 'https://higgsfield.ai' },
+    { label: 'Plans & credits', href: 'https://higgsfield.ai/pricing' },
+  ],
+  poyo: [
+    { label: 'Create account & get API key', href: 'https://poyo.ai/dashboard/api-key' },
+    { label: 'Buy credits', href: 'https://poyo.ai/pricing' },
+  ],
+};
+
+export function SetupLinks({ links }: { links?: { label: string; href: string }[] }) {
+  if (!links?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-faint">
+      {links.map((l, i) => (
+        <span key={l.href} className="flex items-center gap-1.5">
+          {i > 0 && <span aria-hidden>→</span>}
+          <a className="inline-flex items-center gap-1 text-accent underline-offset-2 hover:underline" href={l.href} target="_blank" rel="noreferrer">
+            {l.label}<ExternalLink className="size-3" />
+          </a>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function ProviderCard({ p }: { p: ProviderStatus }) {
   const toast = useStore(s => s.toast);
@@ -78,6 +111,7 @@ function ProviderCard({ p }: { p: ProviderStatus }) {
         </p>
       )}
       {p.authType === 'apiKey' && KEY_HINTS[p.id]?.help && <p className="text-xs text-muted">{KEY_HINTS[p.id]!.help}</p>}
+      <SetupLinks links={PROVIDER_LINKS[p.id]} />
 
       <div className="flex flex-wrap gap-2">
         {p.authType === 'oauth' && (

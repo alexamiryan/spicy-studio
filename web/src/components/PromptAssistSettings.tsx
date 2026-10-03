@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { queryClient } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
 import { ASSIST_KEY, useAssist, type AssistInfo } from './create/PromptAssist';
+import { SetupLinks } from './SettingsModal';
 import { Button, Field, Spinner, inputClass } from './ui';
 
 interface AssistModel { id: string; name: string; vision: boolean; input: number; output: number }
@@ -59,7 +60,12 @@ export function PromptAssistSettings() {
             <Button type="submit" variant="primary" loading={busy} disabled={!key.trim()}>Connect</Button>
           </form>
         )}
-        {!data.configured && <p className="text-xs text-faint">Create a key at openrouter.ai/keys and add credits; the key is stored encrypted.</p>}
+        {!data.configured && <p className="text-xs text-faint">The key is stored encrypted.</p>}
+        <SetupLinks links={[
+          { label: 'Create account', href: 'https://openrouter.ai/sign-up' },
+          { label: 'Get API key', href: 'https://openrouter.ai/keys' },
+          { label: 'Add credits', href: 'https://openrouter.ai/credits' },
+        ]} />
       </div>
 
       <div className="space-y-4 rounded-2xl border border-line p-4">
