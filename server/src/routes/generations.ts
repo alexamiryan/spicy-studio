@@ -63,6 +63,7 @@ export function generationRoutes(app: FastifyInstance) {
       } : {}),
       resolvedPrompt: g.resolved_input?.prompt,
       ...(g.resolved_input?.original ? { originalPrompt: g.resolved_input.original } : {}),
+      ...(g.resolved_input?.enhance ? { autoEnhance: true } : {}),
       refs: refs.map(refDto),
       assets: assets.map(assetDto),
       folder,
@@ -75,8 +76,14 @@ export function generationRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const g = await ownRow(uid(request), 'generations', id);
     if (g.status !== 'failed') bad('Only failed generations can be retried.');
+    // Auto enhanced: if the rewrite itself failed, rewrite again; if it worked, reuse it.
+    const enhance = g.resolved_input?.enhance;
+    const again = Boolean(enhance && !enhance.done);
     const rows = await createGenerations(uid(request), {
-      workspaceId: g.workspace_id, modelId: `${g.provider_id}:${g.model_id}`, prompt: g.prompt,
+      workspaceId: g.workspace_id, modelId: `${g.provider_id}:${g.model_id}`,
+      prompt: again ? g.resolved_input.original ?? g.prompt : g.prompt,
+      ...(again ? { enhance: true, showRefs: enhance.showRefs } : {}),
+      ...(!again && g.resolved_input?.original ? { originalPrompt: g.resolved_input.original } : {}),
       settings: g.settings, refSlots: g.ref_slots, folderId: g.folder_id, batch: 1,
     });
     await q('delete from generations where id = $1', [id]);

@@ -66,6 +66,14 @@ export function PromptAssist({ model }: { model?: ModelInfo }) {
           <Undo2 className="size-3" />Your words
         </button>
       )}
+      {/* Auto enhance: no preview; the rewrite becomes the first step of each generation. */}
+      <button role="switch" aria-checked={Boolean(draft.autoEnhance)} aria-label="Auto enhance"
+        onClick={() => (assist?.configured ? patchDraft({ autoEnhance: !draft.autoEnhance }) : set({ modal: { type: 'settings', tab: 'assist' } }))}
+        title={draft.autoEnhance ? 'Auto enhance on: every generation rewrites your prompt first, without preview. Click to turn off.' : 'Auto enhance: rewrite the prompt as part of each generation, without preview'}
+        className={clsx('absolute right-0 top-7 flex h-5 w-8 items-center justify-center rounded-md text-[9px] font-semibold uppercase tracking-wide transition',
+          draft.autoEnhance ? 'bg-accent text-accent-fg' : 'text-faint hover:bg-white/8 hover:text-muted')}>
+        Auto
+      </button>
       <button onClick={rewrite} disabled={busy} aria-label="Enhance prompt"
         title={assist?.configured ? `Enhance: ${shortModel(assist.model)} rewrites your prompt for this model` : 'Enhance prompts with an AI assistant (set up in Settings)'}
         className={clsx('absolute -top-1 right-0 flex size-8 items-center justify-center rounded-lg transition',

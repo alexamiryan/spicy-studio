@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
 import {
-  AlertTriangle, Check, CheckSquare, Clock, Film, Folder as FolderIcon, FolderInput, FolderPlus, ImagePlus, Images, Inbox, Loader2, MapPin, MoreHorizontal, Pencil, Play, RefreshCw, RotateCcw, Save, Star, Trash2, X,
+  AlertTriangle, Sparkles, Check, CheckSquare, Clock, Film, Folder as FolderIcon, FolderInput, FolderPlus, ImagePlus, Images, Inbox, Loader2, MapPin, MoreHorizontal, Pencil, Play, RefreshCw, RotateCcw, Save, Star, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
@@ -38,6 +38,8 @@ function useCompletionWatcher(ws: string | null, active: Generation[] | undefine
 }
 
 // ---------------------------------------------------------------- cards
+
+const STATUS_LABEL: Record<string, string> = { enhancing: 'Enhancing prompt', pending: 'Submitting', queued: 'Queued', saving: 'Saving', running: 'Generating' };
 
 function ActiveCard({ g }: { g: Generation }) {
   const ws = useStore(s => s.workspaceId)!;
@@ -78,9 +80,10 @@ function ActiveCard({ g }: { g: Generation }) {
   return (
     <div {...openProps} className="shimmer relative flex aspect-[3/4] cursor-pointer flex-col justify-end overflow-hidden rounded-lg border border-line p-1.5 transition hover:border-line-strong md:rounded-xl md:p-2">
       <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-fg backdrop-blur md:text-[11px]"
-        title={g.status === 'pending' ? 'Submitting' : g.status === 'queued' ? 'Queued' : g.status === 'saving' ? 'Saving' : 'Generating'}>
-        {g.status === 'queued' || g.status === 'pending' ? <Clock className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
-        <span className="hidden sm:inline">{g.status === 'pending' ? 'Submitting' : g.status === 'queued' ? 'Queued' : g.status === 'saving' ? 'Saving' : 'Generating'}</span>
+        title={STATUS_LABEL[g.status] || 'Generating'}>
+        {g.status === 'enhancing' ? <Sparkles className="size-3 animate-pulse text-accent" />
+          : g.status === 'queued' || g.status === 'pending' ? <Clock className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
+        <span className="hidden sm:inline">{STATUS_LABEL[g.status] || 'Generating'}</span>
       </div>
       <div className="truncate text-[10px] font-medium md:text-[11px]">{g.modelName}</div>
       <div className="hidden text-[10px] text-muted md:line-clamp-2">{g.prompt}</div>

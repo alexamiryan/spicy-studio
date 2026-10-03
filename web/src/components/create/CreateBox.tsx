@@ -50,8 +50,10 @@ function payload(model: ModelInfo | undefined) {
   return {
     workspaceId,
     modelId: model.id,
-    prompt: draft.prompt,
-    ...(draft.promptOriginal ? { originalPrompt: draft.promptOriginal } : {}),
+    // Auto enhance rewrites the user's own words on the server, so send those (not an earlier preview rewrite).
+    ...(draft.autoEnhance
+      ? { prompt: draft.promptOriginal ?? draft.prompt, enhance: true }
+      : { prompt: draft.prompt, ...(draft.promptOriginal ? { originalPrompt: draft.promptOriginal } : {}) }),
     settings: draft.settings[model.id] || {},
     refSlots: Object.fromEntries(model.refFields.map(f => [f.key, (draft.refSlots[f.key] || []).map(r => r.id)])),
     folderId: draft.folderId,
@@ -94,7 +96,7 @@ function useGenerate(model: ModelInfo | undefined) {
     try {
       const rows = await api.post<Generation[]>('/api/generations', payload(model)!);
       const via = model.providerId === 'auto' ? providerLabel(rows[0]?.providerId) : '';
-      toast(`${rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started'}${via ? ` on ${via}` : ''}`);
+      toast(`${rows.length > 1 ? `Started ${rows.length} generations` : 'Generation started'}${via ? ` on ${via}` : ''}${draft.autoEnhance ? ' · enhancing the prompt first' : ''}`);
       set({ createOpen: false });
       queryClient.invalidateQueries({ queryKey: keys.active(workspaceId!) });
       const prefs = { folderId: draft.folderId, [model.modality === 'image' ? 'imageModel' : 'videoModel']: model.id };

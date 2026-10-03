@@ -385,10 +385,12 @@ export const TOOLS: Tool[] = [
     properties: {
       ...generateProps(), wait_seconds: WAIT,
       original_prompt: { type: 'string', description: 'When prompt came from enhance_prompt: the short prompt it was rewritten from (shown in the studio as the original).' },
+      enhance: { type: 'boolean', description: 'Rewrite the prompt with the prompt assistant as the first step of the job, without review (status "enhancing" until done). About 1–2 cents of OpenRouter credit per batch.' },
     },
     run: async (ctx, args) => {
       const { input } = await buildInput(ctx, args, false);
       if (typeof args.original_prompt === 'string' && args.original_prompt.trim()) input.originalPrompt = args.original_prompt;
+      if (args.enhance === true) input.enhance = true;
       const rows = await createGenerations(ctx.userId, input, ctx.agent.id);
       notifyChange(ctx.userId);
       const ids = rows.map(r => r.id);

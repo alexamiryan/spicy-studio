@@ -13,6 +13,8 @@ export interface Draft {
   batch: number;
   /** The user's own words when the prompt was rewritten by the prompt assistant (null = not rewritten). */
   promptOriginal?: string | null;
+  /** Auto enhance: the prompt assistant rewrites the prompt as the first step of each generation (no preview). */
+  autoEnhance?: boolean;
 }
 
 export const emptyDraft = (): Draft => ({ modality: 'image', models: {}, settings: {}, prompt: '', refSlots: {}, folderId: null, batch: 1 });

@@ -143,7 +143,7 @@ export interface Generation {
   refSlots: Record<string, string[]>;
   batchGroup: string;
   batchSize: number;
-  status: 'pending' | 'queued' | 'running' | 'saving' | 'succeeded' | 'failed';
+  status: 'enhancing' | 'pending' | 'queued' | 'running' | 'saving' | 'succeeded' | 'failed';
   error: string | null;
   estimatedCost: number | null;
   cost: number | null;
@@ -161,6 +161,8 @@ export interface GenerationDetail extends Generation {
   folder: { id: string; name: string } | null;
   /** What the user wrote, when the prompt was rewritten by the prompt assistant. */
   originalPrompt?: string;
+  /** Made with Auto enhance on (restored by Recreate and Animate). */
+  autoEnhance?: boolean;
   /** Made by an agent (API key) rather than in the studio. */
   agentName?: string;
 }

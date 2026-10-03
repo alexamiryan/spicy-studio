@@ -212,7 +212,11 @@ sent after the general ones and winning where they disagree. The pure parts are 
 problem named, then warnings) and `cleanAnswer`. With `showRefs`, references and up to 3 photos per mentioned element
 are sent as 768 px JPEGs (max 12). The UI (`create/PromptAssist.tsx`) shows the rewrite for review; using it keeps the
 user's words in `draft.promptOriginal`, sent as `originalPrompt` and stored in `resolved_input.original` (detail:
-`originalPrompt`; Recreate restores both). Agents get the same rewrite through the MCP tool `enhance_prompt` (needs `generate`; `generate` takes `original_prompt`).
+`originalPrompt`; Recreate restores both). Auto enhance (`GenerateInput.enhance`, `draft.autoEnhance`): rows start as status `enhancing` (in `ACTIVE`) with
+`resolved_input.enhance = {showRefs, done}` and `original`; `enhanceGroup(batch_group)` rewrites once per batch for the
+concrete (routed) model, rebuilds the request, sets `pending` and submits. Failures fail the batch (Retry rewrites
+again unless `done`); `startWorker` resumes `enhancing` groups after a restart (nothing is charged before).
+Agents get the same rewrite through the MCP tool `enhance_prompt` (needs `generate`; `generate` takes `original_prompt`).
 `OPENROUTER_BASE` points at a fake server for tests; never call the real one
 from tests.
 

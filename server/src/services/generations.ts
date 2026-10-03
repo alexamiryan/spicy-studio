@@ -8,7 +8,8 @@ import { notifyChange } from '../events.js';
 import { ownWorkspace } from './access.js';
 import { AUTO, route } from './router.js';
 
-export const ACTIVE = ['pending', 'queued', 'running', 'saving'];
+// 'enhancing': the prompt assistant is rewriting the prompt (auto-enhance) before the job is submitted.
+export const ACTIVE = ['enhancing', 'pending', 'queued', 'running', 'saving'];
 
 /** Batch sizes offered in the create box. Each item is its own provider job, so any provider supports them. */
 export const BATCH_SIZES = [1, 2, 3, 4, 6, 8];
@@ -24,6 +25,10 @@ export interface GenerateInput {
   batch?: number;
   /** The user's own words when the prompt was rewritten by the prompt assistant (kept for Recreate). */
   originalPrompt?: string;
+  /** Auto-enhance: rewrite the prompt with the prompt assistant as the first step of the job (no preview). */
+  enhance?: boolean;
+  /** Auto-enhance: let the assistant see the references (default: the user's setting). */
+  showRefs?: boolean;
 }
 
 function bad(message: string): never { throw new ProviderError(message, 400); }
@@ -188,27 +193,84 @@ export async function createGenerations(userId: string, request: GenerateInput, 
     else await q('update folders set last_used_at = now() where id = $1', [folderId]);
   }
   const group = randomUUID();
+  const enhance = request.enhance ? { showRefs: typeof request.showRefs === 'boolean' ? request.showRefs : undefined, done: false } : undefined;
+  if (enhance) {
+    const { assistSettings } = await import('./promptAssist.js');
+    if (!(await assistSettings(userId)).configured) bad('Auto enhance needs an OpenRouter key: add one in Settings → Prompt assistant, or turn Auto off.');
+  }
   const rows = await tx(async client => {
     const created = [];
     for (let i = 0; i < batch; i++) {
       const { rows } = await client.query(
         `insert into generations (workspace_id, folder_id, provider_id, model_id, model_name, modality, prompt, settings, ref_slots,
                                   batch_group, batch_size, resolved_input, status, idempotency_key, api_token_id, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,$14, clock_timestamp()) returning *`,
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$15,$13,$14, clock_timestamp()) returning *`,
         [input.workspaceId, folderId, provider.id, model.model, model.name, model.modality, built.prompt,
           JSON.stringify(built.settings), JSON.stringify(input.refSlots || {}), group, batch,
           JSON.stringify({
             prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto,
-            ...(request.originalPrompt && request.originalPrompt !== request.prompt ? { original: String(request.originalPrompt).slice(0, 20000) } : {}),
-          }), randomUUID(), apiTokenId]);
+            ...(enhance ? { enhance, original: built.prompt }
+              : request.originalPrompt && request.originalPrompt !== request.prompt ? { original: String(request.originalPrompt).slice(0, 20000) } : {}),
+          }), randomUUID(), apiTokenId, enhance ? 'enhancing' : 'pending']);
       created.push(rows[0]);
     }
     return created;
   });
   // Submit batch items one after another: providers see a steady stream instead of a burst, and the
-  // first item's reference uploads are reused by the rest.
-  (async () => { for (const row of rows) await submit(row.id).catch(error => console.error('submit failed', error)); })();
+  // first item's reference uploads are reused by the rest. Auto enhance rewrites the prompt first.
+  if (enhance) enhanceGroup(group).catch(error => console.error('enhance failed', error));
+  else (async () => { for (const row of rows) await submit(row.id).catch(error => console.error('submit failed', error)); })();
   return rows;
+}
+
+const enhancing = new Set<string>();
+
+/**
+ * Auto enhance, the first step of a batch: rewrite the user's prompt once for the model that will run (after
+ * Auto routing), rebuild the request with it, then submit every item. Nothing is charged before this, so a
+ * failure just fails the batch with the reason (Retry runs the rewrite again), and a restart resumes it.
+ */
+export async function enhanceGroup(group: string) {
+  if (enhancing.has(group)) return;
+  enhancing.add(group);
+  try {
+    const rows = await q(
+      `select g.*, w.user_id from generations g join workspaces w on w.id = g.workspace_id
+        where g.batch_group = $1 and g.status = 'enhancing' order by g.created_at`, [group]);
+    if (!rows.length) return;
+    const g = rows[0];
+    const original: string = g.resolved_input?.original ?? g.prompt;
+    let built: Awaited<ReturnType<typeof buildRequest>>;
+    try {
+      const { model } = await modelFor(g.user_id, `${g.provider_id}:${g.model_id}`);
+      const { enhancePrompt } = await import('./promptAssist.js');
+      const result = await enhancePrompt(g.user_id, model, {
+        workspaceId: g.workspace_id, prompt: original, settings: g.settings, refSlots: g.ref_slots,
+        ...(typeof g.resolved_input?.enhance?.showRefs === 'boolean' ? { showRefs: g.resolved_input.enhance.showRefs } : {}),
+      });
+      if (result.warnings.length) throw new ProviderError(`${result.warnings.join(' ')} Nothing was generated.`);
+      built = await buildRequest(g.workspace_id, model, {
+        workspaceId: g.workspace_id, modelId: `${g.provider_id}:${g.model_id}`, prompt: result.prompt, settings: g.settings, refSlots: g.ref_slots,
+      });
+    } catch (error: any) {
+      const reason = error instanceof ProviderError ? error.message : 'the rewrite failed.';
+      if (!(error instanceof ProviderError)) console.error('enhance', error);
+      for (const row of rows) await fail(row.id, `Prompt assistant: ${reason} Retry, or turn Auto enhance off.`);
+      return;
+    }
+    for (const row of rows) {
+      await q(
+        `update generations set prompt = $2, resolved_input = $3, status = 'pending', updated_at = now() where id = $1 and status = 'enhancing'`,
+        [row.id, built.prompt, JSON.stringify({
+          ...row.resolved_input, prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements,
+          enhance: { ...row.resolved_input.enhance, done: true },
+        })]);
+    }
+    notifyChange(g.user_id);
+    for (const row of rows) await submit(row.id).catch(error => console.error('submit failed', error));
+  } finally {
+    enhancing.delete(group);
+  }
 }
 
 // Uploads in progress, so concurrent jobs using the same file share one upload.
@@ -356,6 +418,10 @@ async function poll(g: any) {
 export function startWorker() {
   // Submissions interrupted by a restart: SpicyAPI requests carry an idempotency key and are safe to resend;
   // other providers are marked failed so nothing is ever charged twice.
+  // Rewrites interrupted by a restart: nothing was charged yet, so they simply run again.
+  q(`select distinct batch_group from generations where status = 'enhancing'`)
+    .then(rows => { for (const row of rows) enhanceGroup(row.batch_group).catch(() => {}); })
+    .catch(error => console.error('worker init', error));
   q(`select id, provider_id from generations where status = 'pending' and task_id is null`).then(rows => {
     for (const row of rows) {
       if (row.provider_id === 'spicyapi') submit(row.id).catch(() => {});
