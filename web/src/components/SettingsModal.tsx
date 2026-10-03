@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Bot, CheckCircle2, ExternalLink, Sparkles, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
+import { Bot, CheckCircle2, ExternalLink, Sparkles, Wand2, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
@@ -61,7 +61,7 @@ export function SetupLinks({ links }: { links?: { label: string; href: string }[
   );
 }
 
-function ProviderCard({ p }: { p: ProviderStatus }) {
+export function ProviderCard({ p }: { p: ProviderStatus }) {
   const toast = useStore(s => s.toast);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -220,12 +220,24 @@ function GeneralTab() {
         </div>
         <Toggle label="Remove metadata when saving" on={Boolean(data?.stripMetadata)} onChange={update} />
       </div>
+      <div className="flex items-center gap-3 rounded-2xl border border-line p-4">
+        <Wand2 className="size-5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">Setup guide</div>
+          <p className="mt-1 text-sm text-muted">Walk through providers, your workspace, saving and extras again.</p>
+        </div>
+        <Button variant="outline" onClick={async () => {
+          // The guide shows whenever "onboarded" is off; it takes over from Settings.
+          try { queryClient.setQueryData(['mySettings'], await api.patch<MySettings>('/api/me/settings', { onboarded: false })); }
+          catch (error) { toast(errorText(error), 'error'); }
+        }}>Run setup again</Button>
+      </div>
     </div>
   );
 }
 
 /** Where "Save" writes: a folder on the server's mounted disk, or an SMB share (NAS). */
-function SaveLocationTab() {
+export function SaveLocationTab() {
   const toast = useStore(s => s.toast);
   const { data } = useMySettings();
   const stored = data?.saveTarget;

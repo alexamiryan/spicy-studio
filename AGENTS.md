@@ -220,6 +220,13 @@ Agents get the same rewrite through the MCP tool `enhance_prompt` (needs `genera
 `OPENROUTER_BASE` points at a fake server for tests; never call the real one
 from tests.
 
+### First-run setup
+
+`components/Onboarding.tsx` is shown while `user_settings.onboarded_at` is null (`GET/PATCH /api/me/settings`
+`onboarded`). Migration 011 marked everyone who had signed in before as done. It reuses the Settings pieces
+(`ProviderCard`, `SaveLocationTab`, `AutoRouterSettings`, `PromptAssistSettings`); the step is kept in localStorage so
+the Higgsfield login redirect returns to it. Settings → General → Run setup again sets `onboarded` back to false.
+
 ### Presets
 
 `presets` (`routes/presets.ts`) store a create-box state per workspace and modality: model id, prompt,

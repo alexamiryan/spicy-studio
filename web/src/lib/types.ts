@@ -181,7 +181,7 @@ export type SaveTargetForm =
   | { type: 'local'; path: string }
   | { type: 'smb'; host: string; share: string; path: string; username: string; domain?: string; hasPassword?: boolean; password?: string };
 
-export interface MySettings { stripMetadata: boolean; saveTarget: SaveTargetForm | null; saveLabel: string; exportRoot: string }
+export interface MySettings { stripMetadata: boolean; saveTarget: SaveTargetForm | null; saveLabel: string; exportRoot: string; /** First-run setup finished or skipped. */ onboarded: boolean }
 
 export interface AdminUser {
   id: string; username: string; role: 'admin' | 'user'; createdAt: string; workspaces: number; results: number; lastSeen: string | null;

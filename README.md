@@ -27,6 +27,8 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 - **Agents (MCP)**: AI agents (e.g. Hermes) generate through the studio over MCP, with folders, Auto models,
   references, presets and saving. One key per agent, each with its own permissions and workspaces. See
   [Connecting agents](#connecting-agents-mcp).
+- **Setup guide**: new accounts get a short wizard on first sign-in (providers with sign-up links, first workspace,
+  save location, Auto models and prompt assistant); run it again from Settings → General.
 - **Workspaces** keep generations, folders, references and elements separate, e.g. one per influencer.
 - **Create box** built from each model's own schema: model picker with search and favorites,
   image/video/audio inputs (start/end frames, reference images, videos, audio), settings, folder and

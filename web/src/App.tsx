@@ -15,6 +15,7 @@ import { RefPicker } from './components/RefPicker';
 import { SettingsModal } from './components/SettingsModal';
 import { Viewer } from './components/Viewer';
 import { WorkspaceModal } from './components/WorkspaceModal';
+import { Onboarding } from './components/Onboarding';
 import { Spinner, Toasts } from './components/ui';
 
 /** New accounts: point at Settings until a provider and a save location are set up. */
@@ -24,7 +25,7 @@ function SetupBanner({ userId }: { userId: string }) {
   const { data: settings } = useMySettings();
   const key = `setupDismissed:${userId}`;
   const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(key) === '1'; } catch { return false; } });
-  if (!providers || !settings || dismissed) return null;
+  if (!providers || !settings || dismissed || !settings.onboarded) return null;
   const needsProvider = !providers.some(p => p.configured);
   const needsSave = !settings.saveTarget;
   if (!needsProvider && !needsSave) return null;
@@ -83,6 +84,7 @@ function UpdateBar() {
 
 function Studio({ username, userId }: { username?: string; userId: string }) {
   const { data: workspaces } = useWorkspaces();
+  const { data: settings } = useMySettings();
   const { workspaceId, setWorkspace, set, toast } = useStore();
 
   useEffect(() => {
@@ -125,6 +127,7 @@ function Studio({ username, userId }: { username?: string; userId: string }) {
       <WorkspaceModal />
       <GenerationModal />
       <TrimModal />
+      {settings && !settings.onboarded && <Onboarding userId={userId} />}
     </div>
   );
 }

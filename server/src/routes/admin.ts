@@ -26,11 +26,21 @@ async function adminCount() {
 
 export function adminRoutes(app: FastifyInstance) {
   // ---------- the signed-in user's own settings ----------
-  app.get('/api/me/settings', async request => publicSettings(await getUserSettings(uid(request))));
+  // `onboarded`: the first-run setup wizard was finished or skipped (false shows it again).
+  const mySettings = async (userId: string) => ({
+    ...publicSettings(await getUserSettings(userId)),
+    onboarded: Boolean((await one('select onboarded_at from user_settings where user_id = $1', [userId]))?.onboarded_at),
+  });
+  app.get('/api/me/settings', async request => mySettings(uid(request)));
 
   app.patch('/api/me/settings', async request => {
-    const body = (request.body || {}) as { stripMetadata?: boolean; saveTarget?: unknown };
-    return updateUserSettings(uid(request), body);
+    const body = (request.body || {}) as { stripMetadata?: boolean; saveTarget?: unknown; onboarded?: boolean };
+    if (typeof body.onboarded === 'boolean') {
+      await q(`insert into user_settings (user_id, onboarded_at) values ($1, $2)
+               on conflict (user_id) do update set onboarded_at = excluded.onboarded_at`, [uid(request), body.onboarded ? new Date() : null]);
+    }
+    if (body.stripMetadata !== undefined || body.saveTarget !== undefined) await updateUserSettings(uid(request), body);
+    return mySettings(uid(request));
   });
 
   // Try a save location (the form's values, or the stored one) by writing and removing a probe file.
