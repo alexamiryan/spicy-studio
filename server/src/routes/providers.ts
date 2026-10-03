@@ -4,7 +4,7 @@ import { higgsfieldFor, providersFor, spicyFor } from '../providers/registry.js'
 import { ProviderError, type Modality } from '../providers/types.js';
 import { modelFor, quoteGeneration, type GenerateInput } from '../services/generations.js';
 import { getProviderRow, saveCredentials, setEnabled } from '../services/providerSettings.js';
-import { AUTO, autoModel, families, getRouterSettings, isUncensored, updateRouterSettings } from '../services/router.js';
+import { AUTO, autoModel, families, familyFor, getRouterSettings, isUncensored, updateRouterSettings } from '../services/router.js';
 
 const origin = (request: FastifyRequest) => `${request.protocol}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 const uid = (request: FastifyRequest) => request.userId!;
@@ -28,7 +28,7 @@ export async function autoModels(userId: string, modality: Modality) {
   const { models } = await getRouterSettings(userId);
   if (!models.length) return [];
   const all = await families(userId);
-  return models.map(key => all.get(key)).filter(f => f && f.modality === modality).map(f => autoModel(f!));
+  return models.map(key => familyFor(all, key)).filter(f => f && f.modality === modality).map(f => autoModel(f!));
 }
 
 const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
@@ -39,7 +39,8 @@ const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
 /** A model by id, Auto models included. */
 export async function modelInfo(userId: string, id: string) {
   if (id.startsWith(`${AUTO}:`)) {
-    const model = [...await autoModels(userId, 'image'), ...await autoModels(userId, 'video')].find(m => m.id === id);
+    const all = [...await autoModels(userId, 'image'), ...await autoModels(userId, 'video')];
+    const model = all.find(m => m.id === id) ?? all.find(m => m.id === `${id}.uncensored`);
     if (!model) throw new ProviderError('This Auto model is not available.', 404);
     return model;
   }

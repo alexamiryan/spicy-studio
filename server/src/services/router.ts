@@ -22,8 +22,18 @@ const NOISE = /\b(video|image|api|model|google|bytedance|openai|alibaba|kuaishou
  * Whether a model version is uncensored: the user's own mark wins, then what the provider reports
  * (SpicyAPI `mature`, PoYo's "Uncensored" tag), then the name. Exported for tests.
  */
+/**
+ * Families that are uncensored on every provider, whatever a provider's own flag says (SpicyAPI flags only its
+ * image-to-video "Spicy" versions, which left its reference-to-video versions out of the uncensored Auto models).
+ */
+const UNCENSORED_EVERYWHERE = /\bwan\s*3(?:\.\d+)?\b/i;
+
+/** A family by key; keys picked before a family became uncensored-only ("….uncensored" now) still work. */
+export const familyFor = <T>(all: Map<string, T>, key: string) => all.get(key) ?? all.get(`${key}.uncensored`);
+
 export function isUncensored(model: Pick<ModelInfo, 'id' | 'name' | 'model' | 'mature'>, marks: Record<string, boolean> = {}): boolean {
   if (typeof marks[model.id] === 'boolean') return marks[model.id];
+  if (UNCENSORED_EVERYWHERE.test(model.name)) return true;
   if (typeof model.mature === 'boolean') return model.mature;
   return /\bspicy\b|uncensored|nsfw/i.test(`${model.name} ${model.model}`);
 }
@@ -267,7 +277,7 @@ export function rankOptions<T extends { uncensored: boolean; usd: number | null 
     Number(b.uncensored) - Number(a.uncensored) || Number(a.usd === null) - Number(b.usd === null) || (a.usd ?? 0) - (b.usd ?? 0));
 }
 
-export interface RouteOption { provider: Provider; model: ModelInfo; settings: Record<string, unknown>; refSlots: Record<string, string[]>; cost: Cost | null; usd: number | null; balance: number | null; uncensored: boolean }
+export interface RouteOption { provider: Provider; model: ModelInfo; settings: Record<string, unknown>; refSlots: Record<string, string[]>; cost: Cost | null; usd: number | null; balance: number | null; uncensored: boolean; rejected?: string }
 
 /**
  * Price every provider's version of an Auto model for this create box and pick the cheapest one whose
@@ -279,7 +289,7 @@ export async function route(
   price: (modelId: string, settings: Record<string, unknown>, refSlots: Record<string, string[]>) => Promise<Cost | null>,
 ): Promise<{ chosen: RouteOption; options: RouteOption[] }> {
   const key = autoModelId.slice(AUTO.length + 1);
-  const family = (await families(userId)).get(key);
+  const family = familyFor(await families(userId), key);
   if (!family) throw new ProviderError('None of your connected providers offers this model right now.', 400);
   const { creditValues: values, marks } = await getRouterSettings(userId);
   const compatible = family.candidates
@@ -288,13 +298,23 @@ export async function route(
   if (!compatible.length) throw new ProviderError(`No provider's ${family.name} can take these inputs. Remove some references and try again.`, 400);
   const options: RouteOption[] = await Promise.all(compatible.map(async c => {
     const s = translateSettings(c.model, settings);
-    const [cost, balance] = await Promise.all([
-      price(c.model.id, s, c.refs).catch(() => null),
+    // A price that can't be had (null) still lets the version run; an error means it can't take this request at
+    // all (e.g. Higgsfield refusing a photo), so it's left out instead of being picked as an unpriced fallback.
+    const [quote, balance] = await Promise.all([
+      price(c.model.id, s, c.refs).then(cost => ({ cost, rejected: undefined as string | undefined }), (error: Error) => ({ cost: null, rejected: error.message })),
       balanceOf(userId, c.provider),
     ]);
-    return { provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance, uncensored: isUncensored(c.model, marks) };
+    const cost = quote.cost;
+    return {
+      provider: c.provider, model: c.model, settings: s, refSlots: c.refs, cost, usd: cost ? usd(cost, c.provider, values) : null, balance,
+      uncensored: isUncensored(c.model, marks), ...(quote.rejected ? { rejected: quote.rejected } : {}),
+    };
   }));
-  const affordable = options.filter(o => !o.cost || o.balance === null || o.balance >= o.cost.amount);
+  const usable = options.filter(o => !o.rejected);
+  if (!usable.length) {
+    throw new ProviderError(`No provider can run this ${family.name} request: ${options.map(o => `${o.provider.name}: ${o.rejected}`).join(' ')}`, 400);
+  }
+  const affordable = usable.filter(o => !o.cost || o.balance === null || o.balance >= o.cost.amount);
   if (!affordable.length) {
     const lines = options.map(o => `${o.provider.name}: needs ${o.cost!.amount} ${o.cost!.unit}, has ${o.balance}`).join('; ');
     throw new ProviderError(`Not enough balance for ${family.name} on any provider (${lines}).`, 400);

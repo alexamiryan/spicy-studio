@@ -12,6 +12,19 @@ export async function bootstrap() {
   await encryptLegacyCredentials();
   await q('insert into user_settings (user_id) select id from users on conflict do nothing');
   await importEnvOnce();
+  await uncensoredWanKeys();
+}
+
+/** Picked Auto models for Wan 3.x families, which became uncensored-only ("….uncensored") everywhere. */
+async function uncensoredWanKeys() {
+  const rows = await q<{ user_id: string; router: any }>(`select user_id, router from user_settings where router ? 'models'`);
+  for (const row of rows) {
+    const models: string[] = Array.isArray(row.router.models) ? row.router.models : [];
+    const next = [...new Set(models.map(k => (/^video\.wan-3[\w.-]*$/.test(k) && !k.endsWith('.uncensored') ? `${k}.uncensored` : k)))];
+    if (JSON.stringify(next) !== JSON.stringify(models)) {
+      await q('update user_settings set router = jsonb_set(router, $2, $3::jsonb) where user_id = $1', [row.user_id, '{models}', JSON.stringify(next)]);
+    }
+  }
 }
 
 async function importEnvOnce() {

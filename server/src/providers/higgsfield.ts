@@ -435,7 +435,14 @@ export class HiggsfieldProvider implements Provider {
     const headers = findKey(ticket, ['headers']) || { 'Content-Type': mime };
     const put = await fetch(uploadUrl, { method: 'PUT', headers, body: new Uint8Array(bytes), signal: AbortSignal.timeout(180_000) });
     if (!put.ok) throw new ProviderError(`Higgsfield upload failed (HTTP ${put.status}).`);
-    await this.call('media_confirm', { media_id: mediaId, type: ['image', 'video', 'audio'].includes(kind) ? kind : 'image' });
+    // Higgsfield refuses some files at this step with a bare "Confirm failed: Something went wrong", reliably for the
+    // same photo (re-encoding or resizing doesn't help), so it's its content filter rather than a hiccup.
+    await this.call('media_confirm', { media_id: mediaId, type: ['image', 'video', 'audio'].includes(kind) ? kind : 'image' }).catch(error => {
+      if (/confirm failed/i.test(error.message)) {
+        throw new ProviderError(`Higgsfield refused ${name} (it rejects some photos without saying why, likely its content filter). Use another photo, or another provider.`, 400);
+      }
+      throw error;
+    });
     const url = findKey(ticket, ['url']);
     return { uri: String(mediaId), url: typeof url === 'string' && /^https:/.test(url) ? url : undefined };
   }

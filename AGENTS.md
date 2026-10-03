@@ -180,9 +180,11 @@ can't take the inputs or misses a required one), prices them with the normal quo
 dollars (user's value → `Provider.unitValueUsd` → fallback) and picks the cheapest whose balance covers it.
 Uncensored and regular versions are separate families (key suffix `.uncensored`, name "… · Uncensored"), so
 routing never crosses between them. `isUncensored(model, marks)`: the user's mark (`user_settings.router.marks`,
-per model id) → `ModelInfo.mature` from the provider (SpicyAPI `mature`, PoYo "Uncensored" tag, Higgsfield's
+per model id) → `UNCENSORED_EVERYWHERE` (Wan 3.x on every provider; SpicyAPI only flags its i2v "Spicy" versions) → `ModelInfo.mature` from the provider (SpicyAPI `mature`, PoYo "Uncensored" tag, Higgsfield's
 hand-kept `UNCENSORED` list since its catalog has no flag) → the name. Safety-checker switches are turned off
-when routing.
+when routing. A candidate whose pricing throws (e.g. Higgsfield refusing a photo at `media_confirm`) is left out
+(`RouteOption.rejected`); one whose price is merely unknown still competes, ranked last. `familyFor` resolves Auto keys
+picked before a family became uncensored-only; `bootstrap.ts` also renames picked Wan 3.x keys.
 Routed generations keep the Auto pick in `resolved_input.auto`; the detail API returns it as
 `modelId/settings/refSlots` (what Recreate/Animate restore) and what ran as `routed`.
 Nothing is provider-specific: a new provider is routed automatically once its models are named like others.

@@ -108,13 +108,20 @@ describe('uncensored versions', () => {
     expect(familyKey('video', 'seedance 2.5')).not.toBe(familyKey('video', 'seedance 2.5', true));
   });
 
+  it('treat every Wan 3.x family as uncensored, whatever the provider says (unless the user marks it)', () => {
+    expect(isUncensored({ id: 's:r2v', name: 'Wan 3.0 Prime · Reference to Video', model: 'alibaba/wan-3.0-prime/reference-to-video', mature: false })).toBe(true);
+    expect(isUncensored({ id: 's:p', name: 'Wan 3.0 Pro Prime · Image To Video', model: 'x', mature: false })).toBe(true);
+    expect(isUncensored({ id: 's:w', name: 'Wan 2.6 Video', model: 'x', mature: false })).toBe(false);
+    expect(isUncensored({ id: 's:r2v', name: 'Wan 3.0 Prime', model: 'x', mature: false }, { 's:r2v': false })).toBe(false);
+  });
+
   it('follow the provider flag, then the user mark, then the name', () => {
     expect(isUncensored({ id: 's:a', name: 'Seedance 2.5 Spicy', model: 'x', mature: true })).toBe(true);
     expect(isUncensored({ id: 's:b', name: 'Seedance 2.5', model: 'y', mature: false })).toBe(false);
-    expect(isUncensored({ id: 'h:c', name: 'Wan 3.0', model: 'wan3_0' })).toBe(false);
-    expect(isUncensored({ id: 'h:c', name: 'Wan 3.0', model: 'wan3_0' }, { 'h:c': true })).toBe(true);
+    expect(isUncensored({ id: 'h:c', name: 'Kling 3.0', model: 'kling3_0' })).toBe(false);
+    expect(isUncensored({ id: 'h:c', name: 'Kling 3.0', model: 'kling3_0' }, { 'h:c': true })).toBe(true);
     expect(isUncensored({ id: 's:a', name: 'X', model: 'x', mature: true }, { 's:a': false })).toBe(false);
-    expect(isUncensored({ id: 'p:d', name: 'Wan 3.0 Spicy', model: 'wan' })).toBe(true);
+    expect(isUncensored({ id: 'p:d', name: 'Kling 3.0 Spicy', model: 'kling' })).toBe(true);
   });
 
   it('win over cheaper censored ones; then price decides', () => {
