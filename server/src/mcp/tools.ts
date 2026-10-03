@@ -11,6 +11,7 @@ import { allowsWorkspace, requirePerm, type Agent, type Perm } from '../services
 import { deleteAssets, folderByName, moveAssets, saveAsset } from '../services/assets.js';
 import { ACTIVE, createGenerations, modelFor, quoteGeneration, type GenerateInput } from '../services/generations.js';
 import { storeFromUrl, storeStream } from '../services/media.js';
+import { enhancePrompt } from '../services/promptAssist.js';
 import { clampWait, mergePreset, modelDetails, modelSummary, pickOne, referenceSlots, type PresetState } from './resolve.js';
 
 /** Who is calling: the agent (API token), its user, and the base URL results can be downloaded from. */
@@ -340,6 +341,33 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'enhance_prompt',
+    description: 'Optional: rewrite a short prompt into a detailed one for the chosen model and its settings, using the user’s prompt assistant (an LLM via OpenRouter, with their general and workspace preferences). Every @image/@element token is kept. Pass the same workspace, model, settings and references you will generate with, then call generate with the returned prompt and original_prompt. Costs about 1–2 cents of the user’s OpenRouter credit; skip it when your prompt is already detailed.',
+    perm: 'generate',
+    properties: {
+      workspace: WORKSPACE,
+      model: { type: 'string', description: 'Model id or name you will generate with.' },
+      prompt: { type: 'string', description: 'What you want, in plain words; @image1… and @Element tokens allowed.' },
+      settings: { type: 'object', description: 'The settings you will generate with (duration, aspect ratio…), so the rewrite fits them.' },
+      references: generateProps().references,
+      show_references: { type: 'boolean', description: 'Let the assistant see the reference photos (default: the user’s setting).' },
+    },
+    required: ['model', 'prompt'],
+    run: async (ctx, args) => {
+      // Same resolution as generate (names → ids); no folder or preset involved.
+      const { input, entry, workspace: ws } = await buildInput(ctx, { ...args, preset: undefined, folder: undefined }, true);
+      const result = await enhancePrompt(ctx.userId, entry.model, {
+        workspaceId: ws.id, prompt: String(args.prompt || ''), settings: input.settings, refSlots: input.refSlots,
+        ...(typeof args.show_references === 'boolean' ? { showRefs: args.show_references } : {}),
+      });
+      return {
+        prompt: result.prompt, original_prompt: String(args.prompt || ''), warnings: result.warnings,
+        assistant: result.model, ...(result.cost ? { costUsd: result.cost } : {}),
+        next: result.warnings.length ? 'Some @ tokens did not survive: check them or call enhance_prompt again.' : 'Call generate with this prompt and original_prompt.',
+      };
+    },
+  },
+  {
     name: 'quote',
     description: 'Price a generation without running it (same arguments as generate). Free.',
     perm: 'generate',
@@ -354,9 +382,13 @@ export const TOOLS: Tool[] = [
     name: 'generate',
     description: 'Generate images or videos. Results appear in the studio; get them with get_results (or wait here). Costs money: check with quote when unsure.',
     perm: 'generate',
-    properties: { ...generateProps(), wait_seconds: WAIT },
+    properties: {
+      ...generateProps(), wait_seconds: WAIT,
+      original_prompt: { type: 'string', description: 'When prompt came from enhance_prompt: the short prompt it was rewritten from (shown in the studio as the original).' },
+    },
     run: async (ctx, args) => {
       const { input } = await buildInput(ctx, args, false);
+      if (typeof args.original_prompt === 'string' && args.original_prompt.trim()) input.originalPrompt = args.original_prompt;
       const rows = await createGenerations(ctx.userId, input, ctx.agent.id);
       notifyChange(ctx.userId);
       const ids = rows.map(r => r.id);
@@ -484,4 +516,5 @@ function generateProps(): Record<string, unknown> {
 
 export const INSTRUCTIONS = `Spicy Studio: generate AI images and videos into the user's studio.
 Typical flow: list_workspaces → list_models (prefer "Auto" models: cheapest provider, uncensored and regular kept apart) → get_model for its settings → generate (with folder, references by name, @Element mentions in the prompt) → get_results with wait_seconds until status is "succeeded" → download a file's url or cleanUrl (metadata stripped) with this same Authorization header, or save_results to put them in the user's save location.
+Optional: enhance_prompt rewrites a short prompt into a detailed one for the chosen model (keeps @ tokens); then pass both to generate (prompt + original_prompt).
 Generations cost real money: use quote when unsure, and don't retry failures in a loop.`;
