@@ -128,14 +128,18 @@ function GenerateButton({ model, className, size = 'md' }: { model?: ModelInfo; 
   const batch = useStore(s => s.draft.batch);
   const quote = useQuote(model);
   return (
-    <Button variant="primary" size={size} className={clsx('min-w-32', className)} onClick={generate} loading={busy} disabled={!model}>
-      {!busy && <Wand2 className="size-4" />}
-      Generate{batch > 1 ? ` ×${batch}` : ''}
-      {quote.data && (
-        <span className="min-w-0 truncate rounded-md bg-black/15 px-1.5 py-0.5 text-xs font-semibold" title={quote.data.via ? `${quote.data.uncensored ? 'Uncensored' : 'Cheapest'} right now: ${quote.data.modelName} on ${quote.data.via}` : undefined}>
-          {formatCost(quote.data.amount, quote.data.unit)}{quote.data.via ? ` · ${quote.data.via}` : ''}
-        </span>
-      )}
+    <Button variant="primary" size={size} className={clsx('min-w-32', className)} onClick={generate} loading={busy} disabled={!model}
+      title={quote.data?.via ? `${quote.data.uncensored ? 'Uncensored' : 'Cheapest'} right now: ${quote.data.modelName} on ${quote.data.via}` : undefined}>
+      {!busy && <Wand2 className="size-4 shrink-0" />}
+      {/* Price (and the provider Auto picked) on a second line, so the fixed-width button never truncates it. */}
+      <span className="flex min-w-0 flex-col items-start leading-tight">
+        <span>Generate{batch > 1 ? ` ×${batch}` : ''}</span>
+        {quote.data && (
+          <span className="max-w-full truncate text-[11px] font-semibold opacity-75">
+            {formatCost(quote.data.amount, quote.data.unit)}{quote.data.via ? ` · ${quote.data.via}` : ''}
+          </span>
+        )}
+      </span>
     </Button>
   );
 }
