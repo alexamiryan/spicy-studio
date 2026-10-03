@@ -193,6 +193,7 @@ export class SpicyProvider implements Provider {
   authType = 'apiKey' as const;
   unit = 'USD';
   private cache = new Map<string, { at: number; value: any }>();
+  private loading = new Map<string, Promise<unknown>>();
 
   constructor(private userId: string, private fetchFn: typeof fetch = fetch) {}
 
@@ -229,12 +230,23 @@ export class SpicyProvider implements Provider {
     return body.data;
   }
 
+  /**
+   * Stale-while-revalidate: after a minute the cached value is still answered at once while a fresh copy
+   * loads in the background (the full catalog takes seconds, and the UI waits on it). Only a cold cache
+   * waits; parallel loads of the same key share one request.
+   */
   private async cached<T>(key: string, load: () => Promise<T>): Promise<T> {
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < 60_000) return hit.value;
-    const value = await load();
-    this.cache.set(key, { at: Date.now(), value });
-    return value;
+    let pending = this.loading.get(key) as Promise<T> | undefined;
+    if (!pending) {
+      pending = load()
+        .then(value => { this.cache.set(key, { at: Date.now(), value }); return value; })
+        .finally(() => this.loading.delete(key));
+      this.loading.set(key, pending);
+    }
+    if (hit) { pending.catch(() => null); return hit.value; }
+    return pending;
   }
 
   async listModels(modality: Modality) {

@@ -15,9 +15,10 @@ export function cachedModel(modelId?: string, modality?: Modality): ModelInfo | 
   return undefined;
 }
 
+/** The model list: cached data at once (refreshed in the background when stale); only a cold cache waits. */
 export async function loadModels(modality: Modality) {
-  return queryClient.fetchQuery({
-    queryKey: keys.models(modality), staleTime: 60_000,
+  return queryClient.ensureQueryData({
+    queryKey: keys.models(modality), staleTime: 60_000, revalidateIfStale: true,
     queryFn: () => api.get<{ providers: ModelGroup[]; favorites: string[] }>(`/api/models?modality=${modality}`),
   });
 }
@@ -35,8 +36,9 @@ export function selectModel(model: ModelInfo) {
 
 /** Load a past generation's prompt, model, settings, refs and folder back into the create box. */
 export async function recreate(generationId: string, source?: Asset) {
-  const { toast, patchDraft, draft, set } = useStore.getState();
-  set({ recreatedFrom: source ?? null });
+  const { toast, patchDraft, set, recreating } = useStore.getState();
+  if (recreating) return; // already loading one: a second click would race it
+  set({ recreatedFrom: source ?? null, recreating: generationId });
   try {
     let g = await api.get<GenerationDetail>(`/api/generations/${generationId}`);
     await loadModels(g.modality).catch(() => null);
@@ -48,9 +50,9 @@ export async function recreate(generationId: string, source?: Asset) {
     for (const [key, ids] of Object.entries(g.refSlots || {})) {
       refSlots[key] = ids.map(id => byId.get(id)).filter((r): r is Ref => { if (!r) missing++; return Boolean(r); });
     }
-    await loadModels(g.modality).catch(() => null);
     const model = cachedModel(g.modelId, g.modality);
     markActive(g.modality, undefined);
+    const { draft } = useStore.getState(); // read after the awaits: the box may have changed meanwhile
     patchDraft({
       modality: g.modality,
       models: { ...draft.models, [g.modality]: g.modelId },
@@ -66,6 +68,8 @@ export async function recreate(generationId: string, source?: Asset) {
     else toast('Loaded into the create box');
   } catch (error) {
     toast(errorText(error), 'error');
+  } finally {
+    set({ recreating: null });
   }
 }
 

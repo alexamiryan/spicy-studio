@@ -43,6 +43,7 @@ function ActiveCard({ g }: { g: Generation }) {
   const ws = useStore(s => s.workspaceId)!;
   const set = useStore(s => s.set);
   const [retrying, setRetrying] = useState(false);
+  const recreating = useStore(s => s.recreating);
   const dismiss = (e: React.MouseEvent) => { e.stopPropagation(); dismissGeneration(g.id, ws); };
   const retry = async (e: React.MouseEvent) => { e.stopPropagation(); setRetrying(true); await retryGeneration(g.id, ws); setRetrying(false); };
   // Clicking the card (outside its buttons) opens the details popup.
@@ -63,9 +64,9 @@ function ActiveCard({ g }: { g: Generation }) {
             disabled={retrying} onClick={retry} title="Retry: submit again with the same settings" aria-label="Retry">
             {retrying ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}<span className="hidden xl:inline">Retry</span>
           </button>
-          <button className="flex h-7 flex-1 items-center justify-center gap-1 rounded-md bg-panel-3 text-[11px] font-medium hover:bg-white/12"
-            onClick={e => { e.stopPropagation(); recreate(g.id); }} title="Recreate: load into the create box to edit" aria-label="Recreate">
-            <RotateCcw className="size-3.5" /><span className="hidden xl:inline">Recreate</span>
+          <button className="flex h-7 flex-1 items-center justify-center gap-1 rounded-md bg-panel-3 text-[11px] font-medium hover:bg-white/12 disabled:opacity-50"
+            disabled={Boolean(recreating)} onClick={e => { e.stopPropagation(); recreate(g.id); }} title="Recreate: load into the create box to edit" aria-label="Recreate">
+            {recreating === g.id ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}<span className="hidden xl:inline">Recreate</span>
           </button>
           <button className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white/8 hover:text-fg" onClick={dismiss} aria-label="Dismiss" title="Dismiss">
             <X className="size-3.5" />
@@ -179,6 +180,7 @@ function AssetCard({ asset, onOpen }: { asset: Asset; onOpen: () => void }) {
 
 /** Quick actions: a row along the bottom on hover (desktop). Phones use the viewer's actions instead. */
 function CardActions({ asset }: { asset: Asset }) {
+  const recreating = useStore(s => s.recreating);
   const action = 'flex size-7 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 hover:text-white [&>svg]:size-3.5';
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden justify-around rounded-b-xl bg-gradient-to-t from-black/80 to-transparent px-1 pb-1 pt-6 opacity-0 transition md:flex md:group-hover:pointer-events-auto md:group-hover:opacity-100 md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100">
@@ -187,8 +189,8 @@ function CardActions({ asset }: { asset: Asset }) {
           <ImagePlus />
         </button>
       )}
-      <button className={action} aria-label="Recreate" title="Recreate" onClick={() => recreate(asset.generationId, asset)}>
-        <RotateCcw />
+      <button className={clsx(action, 'disabled:opacity-50')} aria-label="Recreate" title="Recreate" disabled={Boolean(recreating)} onClick={() => recreate(asset.generationId, asset)}>
+        {recreating === asset.generationId ? <Loader2 className="animate-spin" /> : <RotateCcw />}
       </button>
       <button className={clsx(action, asset.exported && 'text-accent')} aria-label="Save" title={asset.exported ? 'Saved · click to remove the saved copy' : 'Save to workspace folder'} onClick={() => toggleSave(asset)}>
         <Save />

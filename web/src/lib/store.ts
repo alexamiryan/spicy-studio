@@ -49,6 +49,8 @@ interface State {
   createOpen: boolean; // mobile create sheet
   /** The result last used for Recreate; the reference picker offers it first. */
   recreatedFrom: Asset | null;
+  /** The generation Recreate is loading right now (one at a time). */
+  recreating: string | null;
   /**
    * The preset last loaded or saved per modality, with a snapshot of the create box at that moment:
    * a different box means the preset was edited (offered for update, never saved automatically).
@@ -101,6 +103,7 @@ export const useStore = create<State>((set, get) => ({
   modal: null,
   createOpen: false,
   recreatedFrom: null,
+  recreating: null,
   selectAnchor: null,
   upload: null,
   activePreset: {},

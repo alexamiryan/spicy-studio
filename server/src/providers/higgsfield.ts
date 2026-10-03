@@ -348,6 +348,13 @@ export class HiggsfieldProvider implements Provider {
   private async allModels(force = false): Promise<ModelInfo[]> {
     if (!force && this.catalog && Date.now() - this.catalog.at < 10 * 60_000) return this.catalog.items;
     this.loadingCatalog ||= this.fetchCatalog().finally(() => { this.loadingCatalog = undefined; });
+    // Stale but present: answer with it now and let the refresh finish in the background (it takes seconds).
+    if (!force && this.catalog) {
+      this.loadingCatalog
+        .then(items => { this.catalog = { at: Date.now(), items }; })
+        .catch(error => console.warn(`[higgsfield] model list refresh failed, keeping the previous one: ${(error as Error).message}`));
+      return this.catalog.items;
+    }
     try {
       const items = await this.loadingCatalog;
       this.catalog = { at: Date.now(), items };

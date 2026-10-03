@@ -13,7 +13,7 @@ const LABEL: Record<string, string> = { pending: 'Submitting', queued: 'Queued',
 
 /** Details for an in-progress or failed generation: status, full error, generation info and actions. */
 export function GenerationModal() {
-  const { modal, set, workspaceId, toast } = useStore();
+  const { modal, set, workspaceId, toast, recreating } = useStore();
   const id = modal?.type === 'generation' ? modal.id : null;
   const [busy, setBusy] = useState(false);
   const { data: g } = useQuery({
@@ -46,7 +46,9 @@ export function GenerationModal() {
               {!busy && <RefreshCw className="size-4" />}Retry
             </Button>
           )}
-          <Button variant="primary" onClick={() => { close(); recreate(g.id); }}><RotateCcw className="size-4" />Recreate</Button>
+          <Button variant="primary" loading={recreating === g.id} disabled={Boolean(recreating)} onClick={async () => { await recreate(g.id); close(); }}>
+            {recreating !== g.id && <RotateCcw className="size-4" />}Recreate
+          </Button>
         </div>
       </div>
     )}>

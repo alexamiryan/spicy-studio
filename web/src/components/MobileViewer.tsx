@@ -67,7 +67,7 @@ function VideoControls({ video }: { video: HTMLVideoElement | null }) {
 }
 
 function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
-  const { set, workspaceId } = useStore();
+  const { set, workspaceId, recreating } = useStore();
   const [saving, setSaving] = useState(false);
   const target = useSaveTarget(asset);
   const save = async () => { if (saving) return; setSaving(true); await toggleSave(asset); setSaving(false); };
@@ -84,7 +84,9 @@ function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
       </button>
       {target && <div className="-mt-1 truncate text-center text-[10px] text-white/50">to {target}</div>}
       <div className="flex items-stretch justify-between">
-        <button className={action} onClick={() => recreate(asset.generationId, asset)}><RotateCcw className="size-5" />Recreate</button>
+        <button className={action} disabled={Boolean(recreating)} onClick={() => recreate(asset.generationId, asset)}>
+          {recreating === asset.generationId ? <Loader2 className="size-5 animate-spin" /> : <RotateCcw className="size-5" />}Recreate
+        </button>
         <button className={action} onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'}><ImagePlus className="size-5" />As ref</button>
         <button className={action} onClick={() => set({ modal: { type: 'move', assetIds: [asset.id] } })}><FolderInput className="size-5" />Move</button>
         <button className={action} onClick={() => downloadAsset(asset)}><Download className="size-5" />Download</button>

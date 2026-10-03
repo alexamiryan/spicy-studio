@@ -119,7 +119,7 @@ function SecondaryAction({ icon, label, kbd, ...props }: { icon: React.ReactNode
 }
 
 function DesktopViewer() {
-  const { viewer, set, workspaceId } = useStore();
+  const { viewer, set, workspaceId, recreating } = useStore();
   const touch = useRef<{ x: number; y: number } | null>(null);
   const asset = viewer ? viewer.list[viewer.index] : null;
 
@@ -202,7 +202,8 @@ function DesktopViewer() {
                 <SecondaryAction icon={<Clapperboard className="size-4" />} label="Animate" kbd="A" onClick={() => animateAsset(asset)}
                   title="Animate: use as start frame with your last video settings and references (A)" />
               )}
-              <SecondaryAction icon={<RotateCcw className="size-4" />} label="Recreate" kbd="R" onClick={() => recreate(asset.generationId, asset)} />
+              <SecondaryAction icon={recreating === asset.generationId ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+                label="Recreate" kbd="R" disabled={Boolean(recreating)} onClick={() => recreate(asset.generationId, asset)} />
               <SecondaryAction icon={<ImagePlus className="size-4" />} label="As ref" onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'} title="Use as reference in the create box" />
               <MoveMenu align="right" targets={[
                 { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: [asset.id] } }) },
