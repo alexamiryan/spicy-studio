@@ -8,6 +8,7 @@ import { ACTIVE, createGenerations, type GenerateInput } from '../services/gener
 import { deleteAssets, moveAssets, saveAsset } from '../services/assets.js';
 import { collectGarbage } from '../services/media.js';
 import { deleteSaved, type SavedEntry } from '../services/saveTargets.js';
+import { trimAsset } from '../services/trim.js';
 import { mediaDir } from '../config.js';
 import { assetDto, decodeCursor, encodeCursor, generationDto, refDto } from './dto.js';
 
@@ -136,6 +137,15 @@ export function generationRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/assets/delete', async request => ({ deleted: await deleteAssets(uid(request), UUIDS((request.body as any)?.assetIds)) }));
+
+  // Trim a video into a new result next to the original (the original stays).
+  app.post('/api/assets/:id/trim', async request => {
+    const { start, end } = (request.body || {}) as { start?: number; end?: number };
+    const row = await trimAsset(uid(request), (request.params as { id: string }).id, start, end);
+    const full = await one(
+      `select a.*, g.prompt, g.model_name, g.provider_id, g.model_id from assets a join generations g on g.id = a.generation_id where a.id = $1`, [row.id]);
+    return assetDto(full);
+  });
 
   // "Save": copy a result to the user's save location (server folder or SMB share).
   app.post('/api/assets/:id/export', async request => ({ path: await saveAsset(uid(request), (request.params as { id: string }).id) }));

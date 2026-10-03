@@ -48,6 +48,8 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
 - **Library and timeline**: infinite grid with photo/video filters, folders, multi-select, move,
   delete (Shift+click or **Range** selects a range), unseen markers, a full-screen viewer (keyboard shortcuts on desktop, Photos-style gestures
   on phones), and live updates across devices.
+- **Trim** (videos, `T`): drag the start and end, preview the selection on a loop, and save it as a new result
+  next to the original (frame-accurate; the original stays).
 - **Save** copies a result into the workspace's folder on your save location: an **SMB share**
   (e.g. a NAS) or a folder on the server. Optionally strips EXIF/XMP/IPTC/C2PA metadata losslessly.
   **Download** saves to the device (share sheet on iPhone).

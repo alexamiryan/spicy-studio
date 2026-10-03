@@ -6,6 +6,7 @@ import { startUpdateChecks, useUpdateAvailable } from './lib/update';
 import { CreateBox } from './components/create/CreateBox';
 import { FolderSidebar, Gallery } from './components/Gallery';
 import { GenerationModal } from './components/GenerationModal';
+import { TrimModal } from './components/TrimModal';
 import { Header } from './components/Header';
 import { Library } from './components/Library';
 import { Login } from './components/Login';
@@ -123,6 +124,7 @@ function Studio({ username, userId }: { username?: string; userId: string }) {
       <SettingsModal />
       <WorkspaceModal />
       <GenerationModal />
+      <TrimModal />
     </div>
   );
 }

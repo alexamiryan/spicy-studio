@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
-  Bot, Check, ChevronLeft, MapPin, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
+  Bot, Check, ChevronLeft, Scissors, MapPin, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -145,6 +145,7 @@ function DesktopViewer() {
       if (e.key === 's' || e.key === 'S') { e.preventDefault(); document.querySelector<HTMLButtonElement>('[data-save-button]')?.click(); }
       if (e.key === 'r' || e.key === 'R') recreate(current.generationId, current);
       if ((e.key === 'a' || e.key === 'A') && current.kind === 'image') animateAsset(current);
+      if ((e.key === 't' || e.key === 'T') && current.kind === 'video') set({ modal: { type: 'trim', asset: current } });
       if (e.key === 'Delete') deleteAssets(current.workspaceId, [current.id]);
     };
     window.addEventListener('keydown', onKey);
@@ -206,7 +207,9 @@ function DesktopViewer() {
               )}
               <SecondaryAction icon={recreating === asset.generationId ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
                 label="Recreate" kbd="R" disabled={Boolean(recreating)} onClick={() => recreate(asset.generationId, asset)} />
-              <SecondaryAction icon={<ImagePlus className="size-4" />} label="As ref" onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'} title="Use as reference in the create box" />
+              {asset.kind === 'video'
+                ? <SecondaryAction icon={<Scissors className="size-4" />} label="Trim" kbd="T" onClick={() => set({ modal: { type: 'trim', asset } })} title="Trim: cut the start or end into a new result (T)" />
+                : <SecondaryAction icon={<ImagePlus className="size-4" />} label="As ref" onClick={() => assetToRef(asset)} title="Use as reference in the create box" />}
               <MoveMenu align="right" targets={[
                 { key: 'folder', label: 'Folder…', icon: <FolderInput className="size-4" />, hint: 'Another folder of this workspace', onSelect: () => set({ modal: { type: 'move', assetIds: [asset.id] } }) },
                 ...(asset.kind === 'image' ? [

@@ -249,6 +249,10 @@ the element's photos to the primary image field and becomes `image 3, image 4`. 
 
 - `media.ts`: content-addressed store under `DATA_DIR/media` (sha256 path), thumbnails via sharp and
   ffmpeg, HEIC→JPEG, size limits. Downloads use a 30 s stall timeout plus a 15 min cap.
+- Trim: `services/trim.ts` (`POST /api/assets/:id/trim {start, end}`) re-encodes the range with ffmpeg (libx264
+  CRF 16 + AAC; re-encoding makes the cut frame-accurate, stream copy would snap to keyframes) into a **new asset**
+  in the same generation and folder, timestamped 1 µs after the original (computed in SQL: JS dates drop µs).
+  UI: `components/TrimModal.tsx` (handles, per-frame loop of the selection, I/O/Space keys).
 - Save: `saveTargets.ts: saveForUser()` writes to the user's target (`local` under `EXPORT_ROOT`, or `smb`)
   in the workspace's image/video subfolder, with collision-safe names (`exports.ts: savedName`).
   Optional lossless metadata stripping is in `metadata.ts`.

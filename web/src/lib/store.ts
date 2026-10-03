@@ -22,6 +22,7 @@ export type Modal =
   | { type: 'refPicker'; fieldKey: string }
   | { type: 'move'; assetIds: string[] }
   | { type: 'generation'; id: string }
+  | { type: 'trim'; asset: Asset }
   | null;
 
 export interface Toast { id: number; text: string; tone?: 'error' | 'ok' }

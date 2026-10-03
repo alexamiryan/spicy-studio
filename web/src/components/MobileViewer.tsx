@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Check, ChevronUp, Clapperboard, Download, FolderInput, ImagePlus, Info as InfoIcon, Loader2, MapPin, Pause, Play, RotateCcw, Save, Star, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { Check, ChevronUp, Clapperboard, Download, FolderInput, ImagePlus, Info as InfoIcon, Loader2, MapPin, Pause, Play, RotateCcw, Save, Scissors, Star, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { addToEnvironments, addToModelRefs, animateAsset, assetToRef, deleteAssets, downloadAsset, markSeen, recreate, saveAsset, toggleSave } from '../lib/actions';
@@ -87,7 +87,9 @@ function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
         <button className={action} disabled={Boolean(recreating)} onClick={() => recreate(asset.generationId, asset)}>
           {recreating === asset.generationId ? <Loader2 className="size-5 animate-spin" /> : <RotateCcw className="size-5" />}Recreate
         </button>
-        <button className={action} onClick={() => assetToRef(asset)} disabled={asset.kind !== 'image'}><ImagePlus className="size-5" />As ref</button>
+        {asset.kind === 'video'
+          ? <button className={action} onClick={() => set({ modal: { type: 'trim', asset } })}><Scissors className="size-5" />Trim</button>
+          : <button className={action} onClick={() => assetToRef(asset)}><ImagePlus className="size-5" />As ref</button>}
         <button className={action} onClick={() => set({ modal: { type: 'move', assetIds: [asset.id] } })}><FolderInput className="size-5" />Move</button>
         <button className={action} onClick={() => downloadAsset(asset)}><Download className="size-5" />Download</button>
         {asset.kind === 'image'
