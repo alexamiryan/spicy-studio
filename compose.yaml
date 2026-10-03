@@ -32,6 +32,8 @@ services:
       APP_SECRET: ${APP_SECRET:-}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Optional: base URL agents download results from (default: the address they connected to).
+      PUBLIC_URL: ${PUBLIC_URL:-}
       MOCK_PROVIDER: ${MOCK_PROVIDER:-}
     volumes:
       - ${DATA_PATH:-./data}:/data

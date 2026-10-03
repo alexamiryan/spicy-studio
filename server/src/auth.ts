@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from './config.js';
 import { one, q } from './db.js';
 import { ProviderError } from './providers/types.js';
+import { agentForToken, parseBearer, type Agent } from './services/apiTokens.js';
 
 const scrypt = promisify(scryptCb) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 const COOKIE = 'sid';
@@ -43,7 +44,7 @@ export const validPassword = (value: unknown) => typeof value === 'string' && va
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 declare module 'fastify' {
-  interface FastifyRequest { userId?: string; sessionHash?: string; role?: 'admin' | 'user' }
+  interface FastifyRequest { userId?: string; sessionHash?: string; role?: 'admin' | 'user'; agent?: Agent }
 }
 
 /** For admin-only routes. */
@@ -92,9 +93,24 @@ export async function seedAdmin() {
 
 const PUBLIC_API = new Set(['/api/auth/status', '/api/auth/login', '/api/auth/setup']);
 
+/**
+ * Paths agents reach with an API token (Authorization: Bearer sst_…). Tokens work nowhere else, so an
+ * agent can never reach settings, provider keys or admin routes; those stay cookie-only.
+ */
+export const isAgentPath = (url: string) => url === '/mcp' || url.startsWith('/api/agent/');
+
 export function registerAuth(app: FastifyInstance) {
   app.addHook('onRequest', async (request, reply) => {
     const url = request.url.split('?')[0];
+    if (isAgentPath(url)) {
+      const token = parseBearer(request.headers.authorization);
+      const agent = token ? await agentForToken(token) : null;
+      if (!agent) return reply.code(401).send({ error: 'Add a valid agent key: Authorization: Bearer sst_… (Settings → Agents).' });
+      request.userId = agent.userId;
+      request.role = 'user';
+      request.agent = agent;
+      return;
+    }
     const protectedPath = url.startsWith('/api/') || url.startsWith('/media/');
     if (!protectedPath || PUBLIC_API.has(url)) return;
     const token = request.cookies[COOKIE];

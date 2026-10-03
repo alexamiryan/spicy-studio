@@ -8,6 +8,8 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { registerAuth, seedAdmin } from './auth.js';
 import { registerEvents } from './events.js';
+import { mcpRoutes } from './mcp/server.js';
+import { agentRoutes } from './routes/agents.js';
 import { config, mediaDir } from './config.js';
 import { migrate, one, q, waitForDb } from './db.js';
 import { ProviderError } from './providers/types.js';
@@ -69,6 +71,8 @@ workspaceRoutes(app);
 environmentRoutes(app);
 presetRoutes(app);
 generationRoutes(app);
+mcpRoutes(app);
+agentRoutes(app);
 
 app.get('/healthz', async () => ({ ok: true }));
 app.get('/api/config', async () => ({ exportRoot: config.exportRootLabel }));

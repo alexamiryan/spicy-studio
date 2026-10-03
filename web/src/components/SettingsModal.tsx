@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { CheckCircle2, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronLeft, HardDrive, KeyRound, Link2, Monitor, Plug, ShieldCheck, SlidersHorizontal, Unplug, UserRound, Users, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
@@ -9,6 +9,7 @@ import { errorText, useStore } from '../lib/store';
 import type { Balance, MySettings, ProviderStatus, SaveTargetForm } from '../lib/types';
 import { UsersAdmin } from './UsersAdmin';
 import { AutoRouterSettings } from './AutoRouterSettings';
+import { AgentsSettings } from './AgentsSettings';
 import { Button, Field, IconButton, Segmented, inputClass } from './ui';
 
 function refreshProviders() {
@@ -263,13 +264,14 @@ function SaveLocationTab() {
   );
 }
 
-type SettingsTab = 'general' | 'auto' | 'save' | 'providers' | 'account' | 'users';
+type SettingsTab = 'general' | 'auto' | 'save' | 'providers' | 'agents' | 'account' | 'users';
 
 const SECTIONS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string; admin?: boolean }[] = [
   { id: 'general', label: 'General', icon: <SlidersHorizontal className="size-4" />, description: 'How saving behaves.' },
   { id: 'auto', label: 'Auto models', icon: <Zap className="size-4" />, description: 'Models that go to the cheapest provider with enough balance.' },
   { id: 'save', label: 'Save location', icon: <HardDrive className="size-4" />, description: 'Where Save puts your files: a NAS share or a server folder.' },
   { id: 'providers', label: 'Providers', icon: <Plug className="size-4" />, description: 'Connect the services that generate your images and videos.' },
+  { id: 'agents', label: 'Agents', icon: <Bot className="size-4" />, description: 'Keys for AI agents that generate through the studio over MCP.' },
   { id: 'account', label: 'Account', icon: <UserRound className="size-4" />, description: 'Your password and signed-in devices.' },
   { id: 'users', label: 'Users', icon: <Users className="size-4" />, description: 'Create, edit and remove accounts.', admin: true },
 ];
@@ -337,6 +339,7 @@ export function SettingsModal() {
                 {providers.map(p => <ProviderCard key={p.id} p={p} />)}
               </div>
             )}
+            {tab === 'agents' && <AgentsSettings />}
             {tab === 'account' && <AccountTab />}
           </div>
         </main>

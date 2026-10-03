@@ -167,7 +167,8 @@ async function quoteConcrete(userId: string, input: GenerateInput) {
   return cost ? { amount: cost.amount * batch, unit: cost.unit } : null;
 }
 
-export async function createGenerations(userId: string, request: GenerateInput) {
+/** `apiTokenId`: the agent (API token) that asked for it, shown in the studio as "Made by …". */
+export async function createGenerations(userId: string, request: GenerateInput, apiTokenId: string | null = null) {
   await ownWorkspace(userId, request.workspaceId);
   // Auto models: generate with the cheapest provider whose balance covers it. What was picked in the
   // create box (the Auto model, its settings and references) is kept so Recreate and Animate restore it.
@@ -190,11 +191,11 @@ export async function createGenerations(userId: string, request: GenerateInput) 
     for (let i = 0; i < batch; i++) {
       const { rows } = await client.query(
         `insert into generations (workspace_id, folder_id, provider_id, model_id, model_name, modality, prompt, settings, ref_slots,
-                                  batch_group, batch_size, resolved_input, status, idempotency_key, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13, clock_timestamp()) returning *`,
+                                  batch_group, batch_size, resolved_input, status, idempotency_key, api_token_id, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,$14, clock_timestamp()) returning *`,
         [input.workspaceId, folderId, provider.id, model.model, model.name, model.modality, built.prompt,
           JSON.stringify(built.settings), JSON.stringify(input.refSlots || {}), group, batch,
-          JSON.stringify({ prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto }), randomUUID()]);
+          JSON.stringify({ prompt: built.resolvedPrompt, refs: built.slots, elements: built.elements, auto }), randomUUID(), apiTokenId]);
       created.push(rows[0]);
     }
     return created;

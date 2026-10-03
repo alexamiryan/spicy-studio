@@ -159,6 +159,8 @@ export interface GenerationDetail extends Generation {
   refs: Ref[];
   assets: Asset[];
   folder: { id: string; name: string } | null;
+  /** Made by an agent (API key) rather than in the studio. */
+  agentName?: string;
 }
 
 export interface Element { id: string; name: string; description: string; createdAt: string; refs: Ref[] }

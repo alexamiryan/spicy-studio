@@ -5,8 +5,9 @@ import { ProviderError } from '../providers/types.js';
 import { ownedIds, ownRow, ownWorkspace } from '../services/access.js';
 import { slug } from '../services/exports.js';
 import { ACTIVE, createGenerations, type GenerateInput } from '../services/generations.js';
+import { deleteAssets, moveAssets, saveAsset } from '../services/assets.js';
 import { collectGarbage } from '../services/media.js';
-import { saveForUser, deleteSaved, type SavedEntry } from '../services/saveTargets.js';
+import { deleteSaved, type SavedEntry } from '../services/saveTargets.js';
 import { mediaDir } from '../config.js';
 import { assetDto, decodeCursor, encodeCursor, generationDto, refDto } from './dto.js';
 
@@ -48,6 +49,8 @@ export function generationRoutes(app: FastifyInstance) {
       `select a.*, g.prompt, g.model_name, g.provider_id, g.model_id from assets a join generations g on g.id = a.generation_id
         where a.generation_id = $1 order by a.idx`, [id]);
     const folder = g.folder_id ? await one('select id, name from folders where id = $1', [g.folder_id]) : null;
+    // Made by an agent (API token); the name is gone if the key was deleted since.
+    const agent = g.api_token_id ? await one<{ name: string }>('select name from api_tokens where id = $1', [g.api_token_id]) : null;
     // Auto-routed: report what was picked in the create box (for Recreate/Animate) and what actually ran.
     const auto = g.resolved_input?.auto;
     const dto = generationDto(g);
@@ -61,6 +64,7 @@ export function generationRoutes(app: FastifyInstance) {
       refs: refs.map(refDto),
       assets: assets.map(assetDto),
       folder,
+      ...(g.api_token_id ? { agentName: agent?.name || 'a deleted agent key' } : {}),
     };
   });
 
@@ -128,44 +132,13 @@ export function generationRoutes(app: FastifyInstance) {
 
   app.post('/api/assets/move', async request => {
     const body = (request.body || {}) as { assetIds?: string[]; folderId?: string | null };
-    const ids = await ownedIds(uid(request), 'assets', UUIDS(body.assetIds));
-    if (!ids.length) bad('Select something to move.');
-    const folderId = body.folderId || null;
-    if (folderId) {
-      const folder = await ownRow(uid(request), 'folders', folderId);
-      const others = await one('select 1 from assets where id = any($1::uuid[]) and workspace_id <> $2 limit 1', [ids, folder.workspace_id]);
-      if (others) bad('Items can only move within their workspace.');
-    }
-    const moved = await q('update assets set folder_id = $2 where id = any($1::uuid[]) returning id', [ids, folderId]);
-    return { moved: moved.length };
+    return { moved: await moveAssets(uid(request), UUIDS(body.assetIds), body.folderId || null) };
   });
 
-  app.post('/api/assets/delete', async request => {
-    const ids = await ownedIds(uid(request), 'assets', UUIDS((request.body as any)?.assetIds));
-    if (!ids.length) bad('Select something to delete.');
-    const removed = await q<{ file: string; generation_id: string }>('delete from assets where id = any($1::uuid[]) returning file, generation_id', [ids]);
-    // Drop generations that no longer have any results.
-    await q(
-      `delete from generations g where g.id = any($1::uuid[]) and g.status = 'succeeded'
-         and not exists (select 1 from assets a where a.generation_id = g.id)`, [removed.map(r => r.generation_id)]);
-    collectGarbage(removed.map(r => r.file)).catch(() => {});
-    return { deleted: removed.length };
-  });
+  app.post('/api/assets/delete', async request => ({ deleted: await deleteAssets(uid(request), UUIDS((request.body as any)?.assetIds)) }));
 
   // "Save": copy a result to the user's save location (server folder or SMB share).
-  app.post('/api/assets/:id/export', async request => {
-    const { id } = request.params as { id: string };
-    await ownRow(uid(request), 'assets', id);
-    const a = await one(
-      `select a.*, g.model_name, w.image_export_dir, w.video_export_dir
-         from assets a join generations g on g.id = a.generation_id join workspaces w on w.id = a.workspace_id where a.id = $1`, [id]);
-    const result = await saveForUser(uid(request), {
-      file: a.file, mime: a.mime, relDir: a.kind === 'video' ? a.video_export_dir : a.image_export_dir,
-      createdAt: new Date(a.created_at), modelName: a.model_name, index: a.idx,
-    });
-    await q(`update assets set exported_paths = exported_paths || $2::jsonb where id = $1`, [id, JSON.stringify([result.entry])]);
-    return { path: result.display };
-  });
+  app.post('/api/assets/:id/export', async request => ({ path: await saveAsset(uid(request), (request.params as { id: string }).id) }));
 
   // "Unsave": remove the copies Save made (only those; the result itself stays).
   app.delete('/api/assets/:id/export', async request => {

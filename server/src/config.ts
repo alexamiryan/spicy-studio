@@ -12,6 +12,8 @@ export const config = {
   adminPassword: process.env.ADMIN_PASSWORD || '',
   spicyApiKey: process.env.SPICY_API_KEY || '',
   spicyApiBase: process.env.SPICY_API_BASE || 'https://api.spicyapi.ai/api/v1',
+  // Base URL agents download results from (e.g. http://studio.tailnet.ts.net:3000). Default: the request's host.
+  publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   higgsfieldMcpUrl: process.env.HIGGSFIELD_MCP_URL || 'https://mcp.higgsfield.ai/mcp',
 };
 

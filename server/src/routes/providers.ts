@@ -10,7 +10,7 @@ const origin = (request: FastifyRequest) => `${request.protocol}://${request.hea
 const uid = (request: FastifyRequest) => request.userId!;
 
 /** A user's connection status for one provider (secrets never leave the server). */
-async function status(userId: string, id: string) {
+export async function status(userId: string, id: string) {
   const provider = providersFor(userId).find(p => p.id === id)!;
   const row = await getProviderRow(userId, id);
   let detail: string | undefined;
@@ -24,7 +24,7 @@ async function status(userId: string, id: string) {
 }
 
 /** The Auto models a user picked, for one modality. */
-async function autoModels(userId: string, modality: Modality) {
+export async function autoModels(userId: string, modality: Modality) {
   const { models } = await getRouterSettings(userId);
   if (!models.length) return [];
   const all = await families(userId);
@@ -36,7 +36,7 @@ const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
   detail: 'Cheapest provider with enough balance', models,
 });
 
-const favorites = async (userId: string) =>
+export const favorites = async (userId: string) =>
   (await q<{ model_id: string }>('select model_id from favorite_models where user_id = $1 order by created_at', [userId])).map(r => r.model_id);
 
 export function providerRoutes(app: FastifyInstance) {

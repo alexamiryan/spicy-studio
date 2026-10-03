@@ -16,7 +16,7 @@ export interface Draft {
 export const emptyDraft = (): Draft => ({ modality: 'image', models: {}, settings: {}, prompt: '', refSlots: {}, folderId: null, batch: 1 });
 
 export type Modal =
-  | { type: 'settings'; tab?: 'general' | 'auto' | 'save' | 'providers' | 'account' | 'users' }
+  | { type: 'settings'; tab?: 'general' | 'auto' | 'save' | 'providers' | 'agents' | 'account' | 'users' }
   | { type: 'library'; tab?: 'refs' | 'environments' | 'elements' }
   | { type: 'workspace'; id?: string }
   | { type: 'refPicker'; fieldKey: string }

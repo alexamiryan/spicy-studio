@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
-  Check, ChevronLeft, MapPin, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
+  Bot, Check, ChevronLeft, MapPin, Clapperboard, Star, ChevronRight, Copy, Download, Folder as FolderIcon, FolderInput, ImagePlus, Loader2, RotateCcw, Save, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -65,7 +65,8 @@ export function Info({ generationId }: { generationId: string }) {
         ))}
         {g.status !== 'failed' && (g.cost ?? g.estimatedCost) != null && <div><div className="text-xs text-faint">Cost</div><div>{formatCost(g.cost ?? g.estimatedCost, g.costUnit)}</div></div>}
         <div><div className="text-xs text-faint">Folder</div><div className="flex items-center gap-1 truncate"><FolderIcon className="size-3.5 text-muted" />{g.folder?.name || 'Unsorted'}</div></div>
-        <div className="col-span-2"><div className="text-xs text-faint">Created</div><div>{new Date(g.createdAt).toLocaleString()}</div></div>
+        <div className={g.agentName ? '' : 'col-span-2'}><div className="text-xs text-faint">Created</div><div>{new Date(g.createdAt).toLocaleString()}</div></div>
+        {g.agentName && <div><div className="text-xs text-faint">Made by</div><div className="flex items-center gap-1 truncate"><Bot className="size-3.5 text-muted" />{g.agentName}</div></div>}
       </section>
     </div>
   );

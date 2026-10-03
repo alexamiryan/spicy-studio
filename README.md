@@ -24,6 +24,9 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
   Uncensored and regular versions are separate Auto models (e.g. "Seedance 2.5" and "Seedance 2.5 · Uncensored"),
   so a generation never switches between them. Providers report which is which where they can; for Higgsfield,
   which doesn't, mark versions yourself in Settings → Auto models.
+- **Agents (MCP)**: AI agents (e.g. Hermes) generate through the studio over MCP, with folders, Auto models,
+  references, presets and saving. One key per agent, each with its own permissions and workspaces. See
+  [Connecting agents](#connecting-agents-mcp).
 - **Workspaces** keep generations, folders, references and elements separate, e.g. one per influencer.
 - **Create box** built from each model's own schema: model picker with search and favorites,
   image/video/audio inputs (start/end frames, reference images, videos, audio), settings, folder and
@@ -89,6 +92,7 @@ Logins are remembered on each device until you sign out. Everyone can change the
 | `EXPORT_ROOT` | Host folder mounted at `/exports`, for users whose save location is *Server folder*. |
 | `APP_SECRET` | Optional key for encrypting stored secrets. Default: a random key generated once into `data/app.key`. |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Optional: create the admin on first start instead of in the browser (empty database only). |
+| `PUBLIC_URL` | Optional: base URL agents download results from (e.g. `https://studio.tailnet.ts.net`). Default: the address the agent connected to. |
 | `MOCK_PROVIDER=1` | Development only: adds a free "Mock" provider. |
 
 Saving to SMB uses `smbclient` inside the container, so no host mounts or drive letters are needed.
@@ -105,6 +109,30 @@ tailscale serve --bg 3000
 Then open `https://<machine>.<tailnet>.ts.net` (reachable only from your own devices). iPhone: Safari →
 Share → **Add to Home Screen**. Android: Chrome menu → **Install app**. The installed app has its own
 login (sign in once). `tailscale serve reset` stops the HTTPS address.
+
+## Connecting agents (MCP)
+
+The studio is an MCP server at `http://<server>:3000/mcp` (Streamable HTTP), reachable over your LAN or
+Tailscale. In **Settings → Agents**, create a key per agent and choose what it may do: generate, folders,
+upload references, presets, save, delete, and which workspaces it can use. The key is shown once, with a
+ready-to-paste Hermes config:
+
+```yaml
+mcp_servers:
+  spicy-studio:
+    url: "http://<server>:3000/mcp"
+    headers:
+      Authorization: "Bearer sst_…"
+    timeout: 360
+```
+
+Other MCP clients use the same URL and header. Agents work like you do in the studio: they pick models by name
+(Auto models first), pass references, environment photos and results by name or id, mention elements as `@Name`,
+put results in folders (created on the fly), start from presets and save to your save location (metadata stripped
+when that's on). `get_results` returns each file's `url` and `cleanUrl` (metadata stripped); download them with
+the same `Authorization` header. Results appear in the studio live, marked "Made by <agent>". Keys only work on
+the MCP endpoint and agent downloads: never on settings, provider keys or admin pages. Delete a key to cut an
+agent off immediately.
 
 ## Backups and updates
 

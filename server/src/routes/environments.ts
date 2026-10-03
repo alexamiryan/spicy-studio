@@ -16,6 +16,20 @@ const UUID = /^[0-9a-f-]{36}$/;
  * their workspaces. Using one creates (or reuses) a workspace reference linked to it, so generations,
  * recreate and the generation details work exactly as with any other reference.
  */
+/**
+ * The workspace reference for an environment photo (generations only use workspace refs): the one made
+ * earlier, or a new one linked to it. The workspace must already be checked.
+ */
+export async function useEnvironment(userId: string, workspaceId: string, id: string) {
+  const env = await one('select * from environments where id = $1 and user_id = $2', [id, userId]);
+  if (!env) bad('Environment not found.', 404);
+  const existing = await one('select * from refs where workspace_id = $1 and source_environment_id = $2 order by created_at limit 1', [workspaceId, id]);
+  return existing || one(
+    `insert into refs (workspace_id, kind, name, file, thumb, mime, width, height, source_environment_id)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
+    [workspaceId, env.kind, env.name, env.file, env.thumb, env.mime, env.width, env.height, env.id]);
+}
+
 export function environmentRoutes(app: FastifyInstance) {
   app.get('/api/environments', async request => {
     const { cursor, limit } = request.query as Record<string, string | undefined>;
@@ -115,15 +129,7 @@ export function environmentRoutes(app: FastifyInstance) {
     const wanted = (ids || []).map(String).filter(id => UUID.test(id));
     if (!wanted.length) bad('Select something first.');
     const refs = [];
-    for (const id of wanted) {
-      const env = await one('select * from environments where id = $1 and user_id = $2', [id, uid(request)]);
-      if (!env) bad('Environment not found.', 404);
-      const existing = await one('select * from refs where workspace_id = $1 and source_environment_id = $2 order by created_at limit 1', [workspaceId, id]);
-      refs.push(refDto(existing || await one(
-        `insert into refs (workspace_id, kind, name, file, thumb, mime, width, height, source_environment_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
-        [workspaceId, env.kind, env.name, env.file, env.thumb, env.mime, env.width, env.height, env.id])));
-    }
+    for (const id of wanted) refs.push(refDto(await useEnvironment(uid(request), workspaceId!, id)));
     return refs;
   });
 }

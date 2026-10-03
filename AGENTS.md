@@ -27,7 +27,9 @@ server/                   Node 22 + TypeScript API (ESM; imports use .js suffixe
   src/events.ts           per-user Server-Sent Events (/api/events) + notifyChange(userId)
   src/providers/          Provider interface (types.ts), spicyapi.ts, higgsfield.ts, mock.ts, registry.ts (per-user instances)
   src/routes/             workspace.ts (workspaces, folders, refs, elements), generations.ts (generate, assets, save, download),
-                          providers.ts (status, keys, OAuth, models, favorites, balances, quote), admin.ts (my settings, users), dto.ts
+                          providers.ts (status, keys, OAuth, models, favorites, balances, quote), admin.ts (my settings, users),
+                          agents.ts (agent API keys), dto.ts
+  src/mcp/                server.ts (MCP endpoint /mcp + /api/agent/files), tools.ts (the tools), resolve.ts (pure helpers)
   src/services/           generations.ts (request building + worker), media.ts (content-addressed store, thumbs, downloads),
                           access.ts (ownership guards), saveTargets.ts (SMB/local saving), exports.ts (file naming, local save),
                           metadata.ts (lossless metadata stripping), prompt.ts (@mentions), secrets.ts (AES-GCM),
@@ -182,6 +184,22 @@ Routed generations keep the Auto pick in `resolved_input.auto`; the detail API r
 `modelId/settings/refSlots` (what Recreate/Animate restore) and what ran as `routed`.
 Nothing is provider-specific: a new provider is routed automatically once its models are named like others.
 `MOCK_PROVIDER=1` registers two mocks (Mock in credits, Mock B in USD with a small balance) for testing.
+
+### Agents (MCP server)
+
+`/mcp` is a stateless Streamable HTTP MCP server (`mcp/server.ts`: a fresh low-level `Server` + transport per
+request, JSON responses, no sessions). Auth is `Authorization: Bearer sst_…` (`services/apiTokens.ts`: sha256
+stored, shown once, `last4` for display). `registerAuth` accepts bearer tokens **only** on `isAgentPath`
+(`/mcp`, `/api/agent/*`) and cookies only elsewhere, so a key can never reach settings, provider keys or admin.
+Each key (`api_tokens`) has `perms` (`generate`, `folders`, `upload`, `presets`, `save`, `delete`; listing is
+always allowed) and an optional `workspace_ids` allowlist. Tools check `requirePerm` and scope every lookup
+through `allowed()`/`workspaces()` plus the usual ownership guards; foreign or disallowed ids are "not found".
+Tools take names or ids (`resolve.ts: pickOne`; an Auto model wins a name tie) and reuse the studio's code:
+`createGenerations(…, apiTokenId)` (stored in `generations.api_token_id`, shown as "Made by"), `quoteGeneration`,
+`services/assets.ts` (save/move/delete, shared with the routes), `refFromAsset`, `useEnvironment`. Files are
+served by `GET /api/agent/files/:id[?clean=1]` (stripped on the fly); URLs use `PUBLIC_URL` or the request host.
+Tool calls go around the `/api` change hook, so tools call `notifyChange` themselves. Test against the throwaway
+stack with the SDK `Client` (Mock providers only).
 
 ### Presets
 

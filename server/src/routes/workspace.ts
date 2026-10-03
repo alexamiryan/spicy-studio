@@ -20,6 +20,23 @@ export async function environmentFor(userId: string, media: { kind: string; name
       [userId, media.kind, media.name, media.file, media.thumb, media.mime, media.width, media.height]);
 }
 
+/** Reference for a generated result (reused if one exists). `modelRef` also files it under Model refs. */
+export async function refFromAsset(userId: string, assetId: string, modelRef: boolean) {
+  await ownRow(userId, 'assets', assetId);
+  const asset = await one(
+    `select a.*, g.model_name from assets a join generations g on g.id = a.generation_id where a.id = $1`, [assetId]);
+  if (!asset) bad('Result not found.', 404);
+  const existing = await one('select * from refs where source_asset_id = $1', [assetId]);
+  if (existing) {
+    if (modelRef && !existing.is_model_ref) return one('update refs set is_model_ref = true where id = $1 returning *', [existing.id]);
+    return existing;
+  }
+  const name = `${asset.model_name} ${new Date(asset.created_at).toISOString().slice(0, 10)}`;
+  return one(
+    `insert into refs (workspace_id, kind, name, file, thumb, mime, width, height, source_asset_id, is_model_ref)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+    [asset.workspace_id, asset.kind, name, asset.file, asset.thumb, asset.mime, asset.width, asset.height, asset.id, modelRef]);
+}
 /** Create a user's workspace (also used for a new user's first workspace). */
 export async function createWorkspace(userId: string, name: string, imageDir?: string, videoDir?: string) {
   const base = folderSlug(name);
@@ -215,23 +232,7 @@ export function workspaceRoutes(app: FastifyInstance) {
     return created;
   });
 
-  /** Reference for a generated result (reused if one exists). `modelRef` also files it under Model refs. */
-  async function refFromAsset(userId: string, assetId: string, modelRef: boolean) {
-    await ownRow(userId, 'assets', assetId);
-    const asset = await one(
-      `select a.*, g.model_name from assets a join generations g on g.id = a.generation_id where a.id = $1`, [assetId]);
-    if (!asset) bad('Result not found.', 404);
-    const existing = await one('select * from refs where source_asset_id = $1', [assetId]);
-    if (existing) {
-      if (modelRef && !existing.is_model_ref) return one('update refs set is_model_ref = true where id = $1 returning *', [existing.id]);
-      return existing;
-    }
-    const name = `${asset.model_name} ${new Date(asset.created_at).toISOString().slice(0, 10)}`;
-    return one(
-      `insert into refs (workspace_id, kind, name, file, thumb, mime, width, height, source_asset_id, is_model_ref)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
-      [asset.workspace_id, asset.kind, name, asset.file, asset.thumb, asset.mime, asset.width, asset.height, asset.id, modelRef]);
-  }
+
 
   app.post('/api/refs/from-asset', async request => {
     const { assetId, modelRef } = (request.body || {}) as { assetId?: string; modelRef?: boolean };
