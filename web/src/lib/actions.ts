@@ -111,6 +111,8 @@ export async function assetToRef(asset: Asset) {
     queryClient.invalidateQueries({ queryKey: keys.refs(asset.workspaceId) });
   } catch (error) {
     toast(errorText(error), 'error');
+  } finally {
+    set({ animating: null });
   }
 }
 
@@ -305,14 +307,19 @@ function startFrameField(model: ModelInfo) {
  * workspace's last video generation (model, prompt, settings, references, batch, folder).
  */
 export async function animateAsset(asset: Asset) {
-  const { toast, set, patchDraft, draft } = useStore.getState();
+  const { toast, set, patchDraft, animating } = useStore.getState();
+  if (animating) return; // already loading one: a second click would race it
+  set({ animating: asset.id });
   try {
-    const [ref, last] = await Promise.all([
+    // Independent requests in parallel; only the last video's details wait for its id.
+    const [ref, detail0] = await Promise.all([
       api.post<Ref>('/api/refs/from-asset', { assetId: asset.id }),
-      api.get<{ id: string } | null>(`/api/generations/last?workspaceId=${asset.workspaceId}&modality=video`),
+      api.get<{ id: string } | null>(`/api/generations/last?workspaceId=${asset.workspaceId}&modality=video`)
+        .then(last => (last ? api.get<GenerationDetail>(`/api/generations/${last.id}`) : null)),
+      loadModels('video').catch(() => null),
     ]);
-    let detail = last ? await api.get<GenerationDetail>(`/api/generations/${last.id}`) : null;
-    await loadModels('video').catch(() => null);
+    let detail = detail0;
+    const { draft } = useStore.getState(); // read after the awaits: the box may have changed meanwhile
     if (detail?.routed && !cachedModel(detail.modelId, 'video')) detail = { ...detail, ...detail.routed };
     const workspace = queryClient.getQueryData<Workspace[]>(keys.workspaces)?.find(w => w.id === asset.workspaceId);
     const modelId = [detail?.modelId, draft.models.video, workspace?.prefs.videoModel].find(id => id && cachedModel(id, 'video'));

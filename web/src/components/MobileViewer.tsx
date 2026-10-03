@@ -67,7 +67,7 @@ function VideoControls({ video }: { video: HTMLVideoElement | null }) {
 }
 
 function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
-  const { set, workspaceId, recreating } = useStore();
+  const { set, workspaceId, recreating, animating } = useStore();
   const [saving, setSaving] = useState(false);
   const target = useSaveTarget(asset);
   const save = async () => { if (saving) return; setSaving(true); await toggleSave(asset); setSaving(false); };
@@ -91,7 +91,9 @@ function ActionBar({ asset, onInfo }: { asset: Asset; onInfo: () => void }) {
         <button className={action} onClick={() => set({ modal: { type: 'move', assetIds: [asset.id] } })}><FolderInput className="size-5" />Move</button>
         <button className={action} onClick={() => downloadAsset(asset)}><Download className="size-5" />Download</button>
         {asset.kind === 'image'
-          ? <button className={clsx(action, 'text-accent')} onClick={() => animateAsset(asset)}><Clapperboard className="size-5" />Animate</button>
+          ? <button className={clsx(action, 'text-accent')} disabled={Boolean(animating)} onClick={() => animateAsset(asset)}>
+              {animating === asset.id ? <Loader2 className="size-5 animate-spin" /> : <Clapperboard className="size-5" />}Animate
+            </button>
           : <button className={action} onClick={onInfo}><InfoIcon className="size-5" />Info</button>}
         <button className={clsx(action, 'text-[#ff8a95]')} onClick={() => deleteAssets(workspaceId!, [asset.id])}><Trash2 className="size-5" />Delete</button>
       </div>

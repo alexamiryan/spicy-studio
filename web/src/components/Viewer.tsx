@@ -119,7 +119,7 @@ function SecondaryAction({ icon, label, kbd, ...props }: { icon: React.ReactNode
 }
 
 function DesktopViewer() {
-  const { viewer, set, workspaceId, recreating } = useStore();
+  const { viewer, set, workspaceId, recreating, animating } = useStore();
   const touch = useRef<{ x: number; y: number } | null>(null);
   const asset = viewer ? viewer.list[viewer.index] : null;
 
@@ -199,7 +199,8 @@ function DesktopViewer() {
           <div className="flex gap-1.5">
             <div className={clsx('grid min-w-0 flex-1 gap-1.5', asset.kind === 'image' ? 'grid-cols-5' : 'grid-cols-4')}>
               {asset.kind === 'image' && (
-                <SecondaryAction icon={<Clapperboard className="size-4" />} label="Animate" kbd="A" onClick={() => animateAsset(asset)}
+                <SecondaryAction icon={animating === asset.id ? <Loader2 className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}
+                  label="Animate" kbd="A" disabled={Boolean(animating)} onClick={() => animateAsset(asset)}
                   title="Animate: use as start frame with your last video settings and references (A)" />
               )}
               <SecondaryAction icon={recreating === asset.generationId ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
