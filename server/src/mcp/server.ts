@@ -67,6 +67,19 @@ export function mcpRoutes(app: FastifyInstance) {
   app.get('/mcp', notAllowed);
   app.delete('/mcp', notAllowed);
 
+  /** A reference or environment photo for agents, to look at before choosing it (workspace allowlist applies). */
+  app.get('/api/agent/refs/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!/^[0-9a-f-]{36}$/.test(id)) throw new ProviderError('Not found.', 404);
+    const ref = await one(
+      `select r.file, r.mime, r.workspace_id from refs r join workspaces w on w.id = r.workspace_id where r.id = $1 and w.user_id = $2`, [id, request.userId]);
+    const env = ref ? null : await one('select file, mime from environments where id = $1 and user_id = $2', [id, request.userId]);
+    const found = ref || env;
+    if (!found || (ref && !allowsWorkspace(request.agent!, ref.workspace_id))) throw new ProviderError('Not found.', 404);
+    reply.header('Cache-Control', 'no-store');
+    return reply.type(found.mime).sendFile(found.file, mediaDir(), { cacheControl: false });
+  });
+
   /** A result file for agents: the original, or with metadata stripped (?clean=1). */
   app.get('/api/agent/files/:id', async (request, reply) => {
     const { id } = request.params as { id: string };

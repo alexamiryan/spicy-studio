@@ -138,7 +138,8 @@ mcp_servers:
 ```
 
 Other MCP clients use the same URL and header. Agents work like you do in the studio: they pick models by name
-(Auto models first), pass references, environment photos and results by name or id, mention elements as `@Name`,
+(Auto models first), list model refs, uploads and environments separately (each with a link to view it), pass
+references by id (shown with a copy button in every full-screen view) or by a unique name, mention elements as `@Name`,
 put results in folders (created on the fly), optionally have the prompt assistant rewrite their prompt (`enhance_prompt`), start from presets and save to your save location (metadata stripped
 when that's on). `get_results` returns each file's `url` and `cleanUrl` (metadata stripped); download them with
 the same `Authorization` header. Results appear in the studio live, marked "Made by <agent>". Keys only work on

@@ -91,7 +91,7 @@ async function resolveRefs(ctx: ToolContext, workspaceId: string, model: ModelIn
   const slots: Record<string, string[]> = {};
   for (const [key, values] of Object.entries(wanted)) {
     const field = model.refFields.find(f => f.key === key)!;
-    const refs = await q('select id, name, created_at from refs where workspace_id = $1 and kind = $2 and source_environment_id is null order by created_at desc', [workspaceId, field.kind]);
+    const refs = await q('select id, name, is_model_ref, source_asset_id, created_at from refs where workspace_id = $1 and kind = $2 and source_environment_id is null order by created_at desc', [workspaceId, field.kind]);
     const envs = await q('select id, name from environments where user_id = $1 and kind = $2 order by created_at desc', [ctx.userId, field.kind]);
     slots[key] = [];
     for (const value of values) {
@@ -103,11 +103,19 @@ async function resolveRefs(ctx: ToolContext, workspaceId: string, model: ModelIn
         if (envs.some(e => e.id === value)) { slots[key].push((await useEnvironment(ctx.userId, workspaceId, value)).id); continue; }
         bad(`Reference ${value} was not found in this workspace.`, 404);
       }
-      // Names: a workspace reference wins (newest if several share a name), then an environment photo.
-      const ref = refs.find(r => r.name.toLowerCase() === value.toLowerCase());
-      if (ref) { slots[key].push(ref.id); continue; }
-      const env = envs.find(e => e.name.toLowerCase() === value.toLowerCase());
-      if (env) { slots[key].push((await useEnvironment(ctx.userId, workspaceId, env.id)).id); continue; }
+      // Names: only when exactly one reference or environment photo has it. Names often repeat (refs made from
+      // results are named after the model and date), and guessing would silently use the wrong photo.
+      const exact = [
+        ...refs.filter(r => r.name.toLowerCase() === value.toLowerCase()).map(r => ({ id: r.id, library: r.is_model_ref ? 'model' : r.source_asset_id ? 'generated' : 'uploads', env: false })),
+        ...envs.filter(e => e.name.toLowerCase() === value.toLowerCase()).map(e => ({ id: e.id, library: 'environments', env: true })),
+      ];
+      if (exact.length > 1) {
+        bad(`"${value}" matches ${exact.length} references: ${exact.slice(0, 12).map(x => `${x.id} (${x.library})`).join(', ')}${exact.length > 12 ? ', …' : ''}. Pass the id instead (list_references shows them by library, with a url to look at each).`);
+      }
+      if (exact.length === 1) {
+        slots[key].push(exact[0].env ? (await useEnvironment(ctx.userId, workspaceId, exact[0].id)).id : exact[0].id);
+        continue;
+      }
       const picked = pickOne([...refs.map(r => ({ id: r.id, name: r.name, env: false })), ...envs.map(e => ({ id: e.id, name: e.name, env: true }))],
         value, `${field.kind} reference`);
       slots[key].push(picked.env ? (await useEnvironment(ctx.userId, workspaceId, picked.id)).id : picked.id);
@@ -156,6 +164,11 @@ async function buildInput(ctx: ToolContext, args: Record<string, any>, forQuote:
 }
 
 // ---------------------------------------------------------------- results
+
+const refOut = (ctx: ToolContext, r: any, library: string) => ({
+  id: r.id, name: r.name, kind: r.kind, library, width: r.width, height: r.height,
+  url: `${ctx.origin}/api/agent/refs/${r.id}`,
+});
 
 const assetOut = (ctx: ToolContext, a: any) => ({
   id: a.id, kind: a.kind, mime: a.mime, width: a.width, height: a.height, duration: a.duration,
@@ -249,34 +262,48 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'list_references',
-    description: 'Reference photos/videos you can pass to generate by name: "model" (model refs), "uploads", "generated" (results used as refs), "environments" (shared environment library) or "all".',
+    description: 'Reference photos/videos by library, as shown in the studio: "model" (Model refs: the person\'s master photos), "uploads" (Uploads), "environments" (the shared environment library), or "generated" (results that were used as references; not shown as a tab in the studio). Without a library you get model, uploads and environments as separate lists. Names are not unique (several references can share one), so pass ids to generate. Each item has a url (download it with the same Authorization header) to look at the picture.',
     properties: {
       workspace: WORKSPACE,
-      library: { type: 'string', enum: ['all', 'model', 'uploads', 'generated', 'environments'] },
+      library: { type: 'string', enum: ['model', 'uploads', 'environments', 'generated'] },
       kind: { type: 'string', enum: ['image', 'video', 'audio'] },
-      search: { type: 'string' }, limit: { type: 'number', description: 'Up to 200 (default 100).' },
+      search: { type: 'string', description: 'Only names containing this.' },
+      limit: { type: 'number', description: 'Per library, up to 200 (default 100).' },
+      offset: { type: 'number', description: 'Skip this many (newest first, the studio\'s order) for the next page.' },
     },
     run: async (ctx, args) => {
       const ws = await workspace(ctx, args.workspace);
-      const library = args.library || 'all';
       const term = `%${String(args.search || '').replace(/[%_]/g, '')}%`;
-      const limit = Math.min(Math.max(Number(args.limit) || 100, 1), 200);
+      const limit = Math.min(Math.max(Math.round(Number(args.limit) || 100), 1), 200);
+      const offset = Math.max(Math.round(Number(args.offset) || 0), 0);
       const kind = ['image', 'video', 'audio'].includes(args.kind) ? args.kind : null;
-      const out: unknown[] = [];
-      if (library !== 'environments') {
-        const filter = library === 'model' ? 'and is_model_ref' : library === 'uploads' ? 'and not is_model_ref and source_asset_id is null'
-          : library === 'generated' ? 'and source_asset_id is not null' : '';
-        const rows = await q(
-          `select * from refs where workspace_id = $1 and source_environment_id is null ${filter}
-             and ($2::text is null or kind = $2) and name ilike $3 order by created_at desc limit ${limit}`, [ws.id, kind, term]);
-        out.push(...rows.map(r => ({ id: r.id, name: r.name, kind: r.kind, library: r.is_model_ref ? 'model' : r.source_asset_id ? 'generated' : 'uploads', width: r.width, height: r.height })));
+      // The same filters as the studio's tabs (routes/workspace.ts: GET /api/refs).
+      const FILTER: Record<string, string> = {
+        model: 'and is_model_ref', uploads: 'and not is_model_ref and source_asset_id is null', generated: 'and not is_model_ref and source_asset_id is not null',
+      };
+      const refs = async (library: string) => {
+        const where = `workspace_id = $1 and source_environment_id is null ${FILTER[library]} and ($2::text is null or kind = $2) and name ilike $3`;
+        const [rows, total] = await Promise.all([
+          q(`select * from refs where ${where} order by created_at desc, id desc limit ${limit} offset ${offset}`, [ws.id, kind, term]),
+          one<{ n: number }>(`select count(*)::int as n from refs where ${where}`, [ws.id, kind, term]),
+        ]);
+        return { total: total!.n, items: rows.map(r => refOut(ctx, r, library)) };
+      };
+      const environments = async () => {
+        const where = 'user_id = $1 and ($2::text is null or kind = $2) and name ilike $3';
+        const [rows, total] = await Promise.all([
+          q(`select * from environments where ${where} order by created_at desc, id desc limit ${limit} offset ${offset}`, [ctx.userId, kind, term]),
+          one<{ n: number }>(`select count(*)::int as n from environments where ${where}`, [ctx.userId, kind, term]),
+        ]);
+        return { total: total!.n, items: rows.map(e => refOut(ctx, e, 'environments')) };
+      };
+      if (args.library === 'environments') return environments();
+      if (args.library) {
+        if (!FILTER[args.library]) bad('library must be model, uploads, environments or generated.');
+        return refs(args.library);
       }
-      if (library === 'environments' || library === 'all') {
-        const rows = await q(`select * from environments where user_id = $1 and ($2::text is null or kind = $2) and name ilike $3 order by created_at desc limit ${limit}`,
-          [ctx.userId, kind, term]);
-        out.push(...rows.map(e => ({ id: e.id, name: e.name, kind: e.kind, library: 'environments', width: e.width, height: e.height })));
-      }
-      return out.slice(0, limit);
+      const [model, uploads, envs] = await Promise.all([refs('model'), refs('uploads'), environments()]);
+      return { model, uploads, environments: envs };
     },
   },
   {
@@ -507,7 +534,7 @@ function generateProps(): Record<string, unknown> {
     prompt: { type: 'string', description: 'Use @Name for elements and @image1… for references by position.' },
     settings: { type: 'object', description: 'Setting key → value, as listed by get_model. Missing ones use defaults.' },
     references: {
-      description: 'Reference names or ids (or result ids): a list for the model\'s main input, or {"input key": [...]} per input.',
+      description: 'Reference ids from list_references (recommended: names repeat), result ids, or a name that only one reference has. A list goes to the model\'s main input (in order: @image1, @image2…); or {"input key": [...]} per input.',
       anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'object' }],
     },
     folder: { type: 'string', description: 'Folder name or id for the results (created if missing, if allowed), or "unsorted".' },

@@ -14,9 +14,9 @@ import type { Asset, GenerationDetail, Ref } from '../lib/types';
 import { AudioFace, Preview } from './RefPicker';
 import { MoveMenu } from './MoveMenu';
 import { MobileViewer } from './MobileViewer';
-import { IconButton, Spinner, useIsMobile } from './ui';
+import { IconButton, Spinner, useIsMobile, IdChip } from './ui';
 
-export function Info({ generationId }: { generationId: string }) {
+export function Info({ generationId, assetId }: { generationId: string; assetId?: string }) {
   const { data: g, isLoading } = useQuery({
     queryKey: ['generation', generationId],
     queryFn: () => api.get<GenerationDetail>(`/api/generations/${generationId}`),
@@ -73,6 +73,11 @@ export function Info({ generationId }: { generationId: string }) {
         <div><div className="text-xs text-faint">Folder</div><div className="flex items-center gap-1 truncate"><FolderIcon className="size-3.5 text-muted" />{g.folder?.name || 'Unsorted'}</div></div>
         <div className={g.agentName ? '' : 'col-span-2'}><div className="text-xs text-faint">Created</div><div>{new Date(g.createdAt).toLocaleString()}</div></div>
         {g.agentName && <div><div className="text-xs text-faint">Made by</div><div className="flex items-center gap-1 truncate"><Bot className="size-3.5 text-muted" />{g.agentName}</div></div>}
+      </section>
+      {/* Ids for agents: a result id works as a reference, or for save/move/delete. */}
+      <section className="flex flex-col items-start gap-1.5">
+        {assetId && <IdChip id={assetId} label="Result ID" />}
+        <IdChip id={g.id} label="Generation ID" />
       </section>
     </div>
   );
@@ -234,7 +239,7 @@ function DesktopViewer() {
           </div>
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-4">
-          <Info generationId={asset.generationId} />
+          <Info generationId={asset.generationId} assetId={asset.id} />
         </div>
       </aside>
     </div>,

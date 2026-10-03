@@ -135,7 +135,7 @@ function InfoSheet({ asset, onClose }: { asset: Asset; onClose: () => void }) {
               </button>
             </div>
           )}
-          <Info generationId={asset.generationId} />
+          <Info generationId={asset.generationId} assetId={asset.id} />
         </div>
       </div>
     </div>

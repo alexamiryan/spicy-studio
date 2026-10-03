@@ -8,7 +8,7 @@ import { useFileDrop, usePasteFiles } from '../lib/fileInput';
 import { keys, queryClient, useAssets, useEnvironments, useFolders, useRefs } from '../lib/queries';
 import { errorText, useStore } from '../lib/store';
 import type { Asset, Environment, MediaKind, Ref } from '../lib/types';
-import { Button, Empty, IconButton, Modal, Segmented, Spinner } from './ui';
+import { Button, Empty, IconButton, Modal, Segmented, Spinner, IdChip } from './ui';
 
 type Tab = 'uploads' | 'model' | 'generated' | 'environments';
 export type Item = { id: string; thumbUrl: string | null; url: string; kind: MediaKind; name: string; asset?: Asset; ref?: Ref; env?: Environment };
@@ -51,7 +51,7 @@ export function AudioFace({ name, size = 'md' }: { name: string; size?: 'sm' | '
 
 /** Full-size look at a reference before picking it. Esc or a tap outside closes only the preview. */
 export function Preview({ item, action, onClose }: {
-  item: Pick<Item, 'url' | 'kind' | 'name'>; action?: { label: string; primary?: boolean; onClick: () => void }; onClose: () => void;
+  item: Pick<Item, 'url' | 'kind' | 'name'> & { id?: string }; action?: { label: string; primary?: boolean; onClick: () => void }; onClose: () => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
@@ -62,6 +62,8 @@ export function Preview({ item, action, onClose }: {
     <div className="fade-in fixed inset-0 z-[55] flex flex-col bg-black/90 backdrop-blur-sm" onClick={onClose}>
       <div className="pt-safe flex items-center gap-2 p-2">
         <span className="min-w-0 flex-1 truncate px-2 text-sm text-muted">{item.name}</span>
+        {/* The id, for telling an agent exactly which photo to use (names repeat). */}
+        {item.id && <IdChip id={item.id} className="max-w-[55%] bg-black/40" />}
         <IconButton label="Close preview" className="bg-black/40 text-fg" onClick={onClose}><X className="size-5" /></IconButton>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center p-3" >

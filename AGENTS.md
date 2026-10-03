@@ -70,6 +70,9 @@ COMPOSE_FILE=compose.yaml PORT=3100 DATA_PATH=/tmp/st-data EXPORT_ROOT=/tmp/st-e
   docker compose -p studio-uitest down -v --rmi local
 ```
 
+With `PUBLIC_URL` set in `.env`, also pass `PUBLIC_URL=http://localhost:3100` to the throwaway stack, or agent URLs
+point at the real deployment.
+
 To rehearse a migration, restore a `pg_dump` of the real DB into that stack's `db` first. Don't call paid
 provider endpoints from it, and don't use a copied Higgsfield OAuth login there for anything that could
 refresh tokens (it can rotate the real refresh token).
@@ -194,6 +197,9 @@ stored, shown once, `last4` for display). `registerAuth` accepts bearer tokens *
 Each key (`api_tokens`) has `perms` (`generate`, `folders`, `upload`, `presets`, `save`, `delete`; listing is
 always allowed) and an optional `workspace_ids` allowlist. Tools check `requirePerm` and scope every lookup
 through `allowed()`/`workspaces()` plus the usual ownership guards; foreign or disallowed ids are "not found".
+`list_references` lists `model` / `uploads` / `environments` separately (same filters as the studio's tabs; `generated` on
+request), with paging and a `url` per item (`GET /api/agent/refs/:id`). Reference names repeat (refs made from results are
+named after model + date), so a name matching several references is refused with their ids; agents should pass ids.
 Tools take names or ids (`resolve.ts: pickOne`; an Auto model wins a name tie) and reuse the studio's code:
 `createGenerations(…, apiTokenId)` (stored in `generations.api_token_id`, shown as "Made by"), `quoteGeneration`,
 `services/assets.ts` (save/move/delete, shared with the routes), `refFromAsset`, `useEnvironment`. Files are

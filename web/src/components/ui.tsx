@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Loader2, X } from 'lucide-react';
+import { Check, Copy, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../lib/store';
@@ -37,6 +37,38 @@ export function Button({ variant = 'subtle', size = 'md', loading, className, ch
     >
       {loading && <Loader2 className="size-4 animate-spin" />}
       {children}
+    </button>
+  );
+}
+
+/**
+ * Copy text, also over plain http on the LAN (no clipboard API outside secure contexts): falls back to a
+ * hidden textarea and execCommand.
+ */
+export async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* not a secure context */ }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(area);
+  area.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* unsupported */ }
+  area.remove();
+  return ok;
+}
+
+/** An id with a copy button, e.g. to tell an agent exactly which photo to use. */
+export function IdChip({ id, label = 'ID', className }: { id: string; label?: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button type="button" title={`Copy ${label}: ${id}`}
+      onClick={async e => { e.stopPropagation(); if (await copyText(id)) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }}
+      className={clsx('inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg bg-white/8 px-2 font-mono text-[11px] text-muted hover:bg-white/12 hover:text-fg', className)}>
+      <span className="shrink-0 font-sans text-faint">{label}</span>
+      <span className="min-w-0 truncate">{id}</span>
+      {copied ? <Check className="size-3.5 shrink-0 text-accent" /> : <Copy className="size-3.5 shrink-0" />}
     </button>
   );
 }
