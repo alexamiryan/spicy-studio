@@ -51,8 +51,8 @@ New providers plug in behind one interface (see [AGENTS.md](AGENTS.md)).
   delete (Shift+click or **Range** selects a range), unseen markers, a full-screen viewer (keyboard shortcuts on desktop, Photos-style gestures
   on phones), and live updates across devices.
 - **Prompt assistant** (✨ in the prompt box): write what you want as usual; an LLM through
-  [OpenRouter](https://openrouter.ai) (Grok 4.7 by default) rewrites it into a detailed prompt for the selected model and its
-  settings, keeping every `@image`/`@element` link and its role (checked, with one automatic retry). Review it, use it,
+  [OpenRouter](https://openrouter.ai) (Grok 4.7 by default) rewrites the action into clear, literal instructions for the selected model and its
+  settings (it never re-describes your references, which the model already sees), keeping every `@image`/`@element` link and its role (checked, with one automatic retry). Review it, use it,
   or go back to your words (kept with the generation for Recreate). Optional: let it see your references; standing
   preferences in Settings → Prompt assistant, plus per-workspace ones (e.g. an influencer's look) in Workspace settings.
   **Auto** (under ✨) skips the preview: each generation starts right away with an "Enhancing prompt" step (one

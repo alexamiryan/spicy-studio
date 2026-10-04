@@ -45,7 +45,7 @@ export function PromptAssistSettings() {
       <div className="space-y-3 rounded-2xl border border-line p-4">
         <p className="text-sm text-muted">
           Write what you want the way you always do and press <span className="text-fg">✨</span> in the prompt box: the assistant rewrites it
-          into a detailed prompt for the selected model, keeping every <span className="text-accent">@image</span> and
+          into clear, literal instructions for the selected model (it expands the action; it doesn't describe your references), keeping every <span className="text-accent">@image</span> and
           <span className="text-accent"> @element</span> link and what each is for. You review it before it's used, and can always go back to your words.
           It runs through <a className="text-accent hover:underline" href="https://openrouter.ai" target="_blank" rel="noreferrer">OpenRouter</a> (about 1–2¢ per rewrite with Grok).
         </p>
@@ -81,7 +81,7 @@ export function PromptAssistSettings() {
           <input type="checkbox" className="mt-1 accent-[var(--color-accent)]" checked={data.showRefs} onChange={e => save({ showRefs: e.target.checked })} />
           <span className="text-sm">
             Let it see references by default
-            <span className="block text-xs text-faint">It can then describe your actual environment, outfit and body instead of guessing. The photos go to OpenRouter and the model's provider. You can switch it per rewrite.</span>
+            <span className="block text-xs text-faint">Helps it tell your references apart (which is the person, which the room); it never describes them in the prompt. The photos go to OpenRouter and the model's provider. You can switch it per rewrite.</span>
           </span>
         </label>
       </div>

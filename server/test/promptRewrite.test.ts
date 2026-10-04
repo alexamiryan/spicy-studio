@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkTokens, cleanAnswer, describeTarget, tokenTable, tokens, userMessage } from '../src/services/promptRewrite.js';
+import { checkTokens, cleanAnswer, describeTarget, SYSTEM_PROMPT, tokenTable, tokens, userMessage } from '../src/services/promptRewrite.js';
 import type { ModelInfo } from '../src/providers/types.js';
 
 describe('prompt assistant tokens', () => {
@@ -35,6 +35,14 @@ describe('prompt assistant tokens', () => {
 });
 
 describe('what the assistant is told', () => {
+  it('expands the action and never describes the references', () => {
+    expect(SYSTEM_PROMPT).toMatch(/NOT to describe the references/);
+    expect(SYSTEM_PROMPT).toMatch(/Never describe what a reference shows/);
+    expect(SYSTEM_PROMPT).toMatch(/Expand the action/);
+    expect(SYSTEM_PROMPT).toMatch(/describe only what CHANGES over time/);
+    expect(userMessage({ target: 'X', refs: [], elements: [], prompt: 'p', withImages: true })).toContain('never describe them in the prompt');
+  });
+
   const model: ModelInfo = {
     id: 'auto:video.wan-3-prime.uncensored', providerId: 'auto', model: 'x', name: 'Wan 3.0 Prime · Uncensored', modality: 'video', available: true,
     fields: [
@@ -57,7 +65,7 @@ describe('what the assistant is told', () => {
     ], [{ name: 'Mia', description: 'red dress', photos: 3 }]);
     expect(table).toContain('- @image1: photo 1 in "References"');
     expect(table).toContain('attached as "Start frame"');
-    expect(table).toContain('- @Mia: element with 3 photos — red dress');
+    expect(table).toContain("- @Mia: element with 3 photos (the user's note: red dress)");
   });
 
   it('adds the workspace preferences after the general ones', () => {
