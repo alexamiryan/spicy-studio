@@ -29,7 +29,12 @@ export async function autoModels(userId: string, modality: Modality) {
   const { models } = await getRouterSettings(userId);
   if (!models.length) return [];
   const all = await families(userId);
-  return models.map(key => familyFor(all, key)).filter(f => f && f.modality === modality).map(f => autoModel(f!));
+  // Keys picked before a family became uncensored-only point at "….uncensored" now: store that instead (dropping
+  // the duplicate when both were picked). Keys of families that are gone for now (provider disconnected) are kept.
+  const normalised = [...new Set(models.map(key => familyFor(all, key)?.key ?? key))];
+  if (normalised.length !== models.length || normalised.some((key, i) => key !== models[i])) await updateRouterSettings(userId, { models: normalised });
+  const picked = new Map(normalised.map(key => [key, all.get(key)]));
+  return [...picked.values()].filter(f => f && f.modality === modality).map(f => autoModel(f!));
 }
 
 const autoGroup = (models: ReturnType<typeof autoModel>[]) => ({
