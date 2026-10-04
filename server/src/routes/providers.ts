@@ -3,7 +3,8 @@ import { q } from '../db.js';
 import { higgsfieldFor, providersFor, spicyFor } from '../providers/registry.js';
 import { ProviderError, type Modality } from '../providers/types.js';
 import { modelFor, quoteGeneration, type GenerateInput } from '../services/generations.js';
-import { getProviderRow, saveCredentials, setEnabled } from '../services/providerSettings.js';
+import { getProviderRow, saveCredentials, saveState, setEnabled } from '../services/providerSettings.js';
+import { nextPeak } from '../services/balancePeak.js';
 import { AUTO, autoModel, families, familyFor, getRouterSettings, isUncensored, updateRouterSettings } from '../services/router.js';
 
 const origin = (request: FastifyRequest) => `${request.protocol}://${request.headers['x-forwarded-host'] || request.headers.host}`;
@@ -184,7 +185,15 @@ export function providerRoutes(app: FastifyInstance) {
     const results = await Promise.all(providersFor(userId).map(async p => {
       const s = await status(userId, p.id);
       if (!p.balance || !s.configured || !s.enabled) return null;
-      try { return { providerId: p.id, name: p.name, ...(await p.balance()) }; }
+      try {
+        const balance = await p.balance();
+        if (typeof balance.amount !== 'number') return { providerId: p.id, name: p.name, ...balance };
+        // "Full" for the header ring: the balance after the last top-up (kept per user and provider).
+        const state = (await getProviderRow(userId, p.id)).state;
+        const peak = nextPeak({ peak: state.balancePeak, last: state.balanceLast }, balance.amount);
+        if (peak !== state.balancePeak || balance.amount !== state.balanceLast) await saveState(userId, p.id, { balancePeak: peak, balanceLast: balance.amount });
+        return { providerId: p.id, name: p.name, ...balance, peak };
+      }
       catch (error: any) { return { providerId: p.id, name: p.name, amount: null, unit: p.unit, error: error.message }; }
     }));
     return results.filter(Boolean);

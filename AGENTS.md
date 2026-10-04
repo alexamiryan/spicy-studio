@@ -149,6 +149,10 @@ schemas go through SpicyAPI's `normalizeSchema` after `simplify()` (preset branc
 and documents dropped); `forVariant()` shapes each variant (plain vs `-edit`, text- vs image-to-video). There
 is no quote endpoint: `estimateCredits()` picks the best-matching published tier (× seconds when per second).
 
+Header balances are rings (`Header.tsx: BalanceRing`): `GET /api/balances` adds `peak`, the balance after the last
+top-up (`services/balancePeak.ts: nextPeak`, kept in `provider_settings.state.balancePeak/balanceLast`; an increase of
+≥10% starts a new cycle, refunds don't), and the ring shows `amount / peak`, red → amber → green.
+
 Provider API-key routes are generic (`PUT/DELETE /api/providers/:id/key`, validated with `balance()`), and a
 provider's 401 is sent to the browser as 400 so a wrong provider key never signs the user out.
 

@@ -169,7 +169,7 @@ export interface GenerationDetail extends Generation {
 
 export interface Element { id: string; name: string; description: string; createdAt: string; refs: Ref[] }
 
-export interface Balance { providerId: string; name: string; amount: number | null; unit: string; detail?: string; error?: string }
+export interface Balance { providerId: string; name: string; amount: number | null; unit: string; detail?: string; error?: string; /** Balance after the last top-up: "full" for the header ring. */ peak?: number }
 
 export interface Page<T> { items: T[]; nextCursor: string | null }
 
